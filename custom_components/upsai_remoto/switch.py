@@ -91,24 +91,28 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         """Execute HTTP POST command to turn target outlet OFF, checking for safety locks."""
-        # SMART FILTER: Read the lock bit string out of the coordinator cache right now
+        # 1. Read the lock bit string out of the coordinator cache right now
         is_locked = False
         if self.coordinator.data and "bank" in self.coordinator.data:
             lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
             if len(lock_str) == 8:
                 is_locked = (lock_str[-1 - self._outlet_id] == "1")
 
-        # If the hardware is locked, DO NOT engage the local state override block.
-        # Just fire the command to let the device handle it, and let the 1s loop do the talking.
+        # 🚀 THE INSTANT REJECTION PATH FOR LOCKED SWITCHES
         if is_locked:
             url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
             try:
+                # Fire the POST action to maintain command transmission tracking logs
                 await self._session.post(url)
             except Exception as err:
                 _LOGGER.error("Failed to send off command to locked outlet %s: %s", self._outlet_id, err)
+            
+            # FORCE INSTANT REDRAW: Tell the UI framework to cancel its automatic gray-out 
+            # and instantly re-evaluate our 'is_on' property right now.
+            self.async_write_ha_state()
             return
 
-        # If it's NOT locked, proceed with our highly responsive adaptive state lock
+        # 🎛️ THE STANDARD ADAPTIVE LOCK PATH FOR UNLOCKED SWITCHES
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
         try:
             async with self._session.post(url) as response:
@@ -119,7 +123,6 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         except Exception as err:
             _LOGGER.error("Failed to turn off outlet %s: %s", self._outlet_id, err)
             self._local_state = None
-
 
 class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Safety Lock Toggle."""
