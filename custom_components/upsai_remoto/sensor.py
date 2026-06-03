@@ -13,7 +13,6 @@ async def async_setup_entry(
     """Set up the UPSAI sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
-    # Pull the variable attached directly to the coordinator object
     device_id = getattr(coordinator, "device_id", "P6IO7078YR")
 
     async_add_entities([
@@ -43,6 +42,7 @@ class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
+        """Read real-time sensors directly from the WebSocket dictionary block."""
         if self.coordinator.data and "sensors" in self.coordinator.data:
             return self.coordinator.data["sensors"].get(self._key)
         return None

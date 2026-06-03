@@ -1,58 +1,93 @@
-from datetime import timedelta
+import asyncio
 import logging
-import async_timeout
+import json
 import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto from a config entry."""
+    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection."""
     
-    # Secure the dynamic extraction with strict hardcoded fallbacks
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
     
     session = async_get_clientsession(hass)
 
-    async def async_get_ups_data():
-        """Fetch data from the local UPS REST API endpoints."""
-        url_sensors = f"http://{device_ip}/fwi/{device_id}/sensors/values"
-        url_bank = f"http://{device_ip}/fwi/{device_id}/bank/0"
+    # Core system runtime state container registry mimic
+    class WebSocketCoordinator:
+        def __init__(self):
+            self.data = {"sensors": {}, "bank": {}}
+            self.device_ip = device_ip
+            self.device_id = device_id
+            self.listeners = []
+            self._ws = None  # Holds the live active socket connection object pointer
+
+        def async_add_listener(self, callback):
+            """Allows entities to bind UI refresh actions."""
+            self.listeners.append(callback)
+
+        async def async_send_ws_command(self, command_string: str):
+            """Pushes pure command strings directly back down the active pipe."""
+            if self._ws and not self._ws.closed:
+                try:
+                    _LOGGER.info("Sending WS Command: %s", command_string)
+                    # Sends plain text directly to your Mongoose websocket_handler
+                    await self._ws.send_str(command_string)
+                except Exception as err:
+                    _LOGGER.error("Failed to write to WebSocket stream pipe: %s", err)
+            else:
+                _LOGGER.warning("Command dropped: WebSocket connection is offline.")
+
+    coordinator = WebSocketCoordinator()
+
+    async def websocket_listener_task():
+        """Maintains connection to Mongoose default /websocket route endpoint."""
+        ws_url = f"ws://{device_ip}/websocket"
         
-        try:
-            async with async_timeout.timeout(0.8):
-                async with session.get(url_sensors) as response:
-                    sensors_data = await response.json()
-                
-                async with session.get(url_bank) as response:
-                    bank_data = await response.json()
-                
-                return {
-                    "sensors": sensors_data,
-                    "bank": bank_data
-                }
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with UPS device: {err}")
+        while True:
+            try:
+                _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
+                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
+                    coordinator._ws = ws  # Map the socket reference to our coordinator
+                    _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
+                    
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            raw_payload = json.loads(msg.data)
+                            
+                            # Standardize layout parameters mapping from your compressed payload format
+                            coordinator.data = {
+                                "sensors": {
+                                    "Vin": raw_payload.get("Vin", 0.0),
+                                    "Vout": raw_payload.get("Vout", 0.0),
+                                    "Power": raw_payload.get("Power", 0),
+                                    "Msg": raw_payload.get("Msg", "WS Telemetry Active")
+                                },
+                                "bank": {
+                                    "bank0_stat": raw_payload.get("bank0_stat", "00000000"),
+                                    "bank0_lock": raw_payload.get("bank0_lock", "00000000")
+                                }
+                            }
+                            
+                            # Instant UI redraw prompt trigger
+                            for update_callback in coordinator.listeners:
+                                update_callback()
+                                
+            except aiohttp.ClientError as err:
+                _LOGGER.warning("Mongoose stream dropped: %s. Re-linking in 5s...", err)
+            except Exception as err:
+                _LOGGER.error("WebSocket background task exception error: %s", err)
+            
+            coordinator._ws = None  # Clear socket layout assignment on break
+            await asyncio.sleep(5)
 
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="UPSAI Data Coordinator",
-        update_method=async_get_ups_data,
-        update_interval=timedelta(seconds=1),
-    )
-
-    await coordinator.async_config_entry_first_refresh()
-
-    # SAFE INJECTION: Attach variables straight to the coordinator object!
-    coordinator.device_ip = device_ip
-    coordinator.device_id = device_id
+    # Launch background thread daemon loop pool controller task worker
+    entry.async_create_background_task(hass, websocket_listener_task(), "upsai_ws_listener")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
@@ -60,8 +95,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return True
+    """Unload entry data paths cleanly from backend loops."""
+    return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])

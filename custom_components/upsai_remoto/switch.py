@@ -2,10 +2,8 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 
 DOMAIN = "upsai_remoto"
@@ -16,31 +14,27 @@ async def async_setup_entry(
 ) -> None:
     """Set up the UPSAI switches from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    session = async_get_clientsession(hass)
-    
-    device_ip = getattr(coordinator, "device_ip", "192.168.0.3")
+
+    # Safely extract the device tracking strings attached to the coordinator object
     device_id = getattr(coordinator, "device_id", "P6IO7078YR")
 
     entities = []
+    # Auto-generate the 16 standard dynamic switches passing the parent coordinator pointer
     for i in range(8):
-        entities.append(UpsaiOutputSwitch(hass, coordinator, session, device_ip, device_id, i))
-        entities.append(UpsaiLockSwitch(hass, coordinator, session, device_ip, device_id, i))
+        entities.append(UpsaiOutputSwitch(coordinator, device_id, i))
+        entities.append(UpsaiLockSwitch(coordinator, device_id, i))
 
-    entities.append(UpsaiMasterDeviceSwitch(coordinator, session, device_ip, device_id))
+    entities.append(UpsaiMasterDeviceSwitch(coordinator, device_id))
     async_add_entities(entities)
+
 
 class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Power Outlet Switch."""
-    def __init__(self, hass, coordinator, session, ip, device_id, outlet_id):
+    def __init__(self, coordinator, device_id, outlet_id):
         super().__init__(coordinator)
-        self.hass = hass
         self._coordinator = coordinator
-        self._session = session
-        self._ip = ip
         self._device_id = device_id
         self._outlet_id = outlet_id
-        self._local_state = None
-        self._lock_time = 0
         
         self._attr_name = f"Saída {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
@@ -54,75 +48,30 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        server_on = False
+        """Read state right-to-left from the compressed WebSocket string cache."""
         if self.coordinator.data and "bank" in self.coordinator.data:
             bank_str = self.coordinator.data["bank"].get("bank0_stat", "00000000")
             if len(bank_str) == 8:
-                server_on = (bank_str[-1 - self._outlet_id] == "1")
-
-        if self._local_state is not None:
-            if self.hass.loop.time() - self._lock_time > 4.0:
-                self._local_state = None
-                return server_on
-            if server_on == self._local_state:
-                self._local_state = None
-                return server_on
-            return self._local_state
-            
-        return server_on
+                return bank_str[-1 - self._outlet_id] == "1"
+        return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/ON"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = True
-                    self._lock_time = self.hass.loop.time()
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Failed to turn on outlet %s: %s", self._outlet_id, err)
-            self._local_state = None
+        """Sends raw command string straight down the open WebSocket pipeline channel."""
+        # This calls a sender method we will add to our __init__.py WebSocket bridge
+        await self._coordinator.async_send_ws_command(f"OUT0-{self._outlet_id}:ON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Execute HTTP POST command checking for lock blocks BEFORE hitting the network."""
-        # 1. Read the lock state out of the coordinator cache right now
-        is_locked = False
-        if self.coordinator.data and "bank" in self.coordinator.data:
-            lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
-            if len(lock_str) == 8:
-                is_locked = (lock_str[-1 - self._outlet_id] == "1")
-
-        # 🚀 HARD INTERFACE LOCKOUT:
-        # If the outlet is locked, block the command instantly before any HTTP lag happens!
-        if is_locked:
-            # Raising this native error instantly freezes the toggle and cancels the animation
-            raise HomeAssistantError(f"Operação negada: A Saída {self._outlet_id} está bloqueada por segurança!")
-
-        # 🎛️ Standard execution loop for non-locked outlets
-        url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = False
-                    self._lock_time = self.hass.loop.time()
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Failed to turn off outlet %s: %s", self._outlet_id, err)
-            self._local_state = None
+        """Sends raw command string straight down the open WebSocket pipeline channel."""
+        await self._coordinator.async_send_ws_command(f"OUT0-{self._outlet_id}:OFF")
 
 
 class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Safety Lock Toggle."""
-    def __init__(self, hass, coordinator, session, ip, device_id, outlet_id):
+    def __init__(self, coordinator, device_id, outlet_id):
         super().__init__(coordinator)
-        self.hass = hass
         self._coordinator = coordinator
-        self._session = session
-        self._ip = ip
         self._device_id = device_id
         self._outlet_id = outlet_id
-        self._local_state = None
-        self._lock_time = 0
         
         self._attr_name = f"Safety Lock {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
@@ -133,59 +82,26 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        server_locked = False
+        """Read lock state right-to-left from the compressed WebSocket string cache."""
         if self.coordinator.data and "bank" in self.coordinator.data:
             lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
             if len(lock_str) == 8:
-                server_locked = (lock_str[-1 - self._outlet_id] == "1")
-
-        if self._local_state is not None:
-            if self.hass.loop.time() - self._lock_time > 4.0:
-                self._local_state = None
-                return server_locked
-
-            if server_locked == self._local_state:
-                self._local_state = None
-                return server_locked
-                
-            return self._local_state
-            
-        return server_locked
+                return lock_str[-1 - self._outlet_id] == "1"
+        return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/LOCKON"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = True
-                    self._lock_time = self.hass.loop.time()
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Failed to lock outlet %s: %s", self._outlet_id, err)
-            self._local_state = None
+        await self._coordinator.async_send_ws_command(f"OUT0-{self._outlet_id}:LOCKON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/UNLOCK"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = False
-                    self._lock_time = self.hass.loop.time()
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Failed to unlock outlet %s: %s", self._outlet_id, err)
-            self._local_state = None
+        await self._coordinator.async_send_ws_command(f"OUT0-{self._outlet_id}:UNLOCK")
 
 
 class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of the Global Device Master Toggle Switch."""
-    def __init__(self, coordinator, session, ip, device_id):
+    def __init__(self, coordinator, device_id):
         super().__init__(coordinator)
         self._coordinator = coordinator
-        self._session = session
-        self._ip = ip
         self._device_id = device_id
-        self._local_state = None
         
         self._attr_name = "Dispositivo"
         self._attr_unique_id = f"{device_id.lower()}_master_device"
@@ -196,9 +112,7 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        if self._local_state is not None:
-            return self._local_state
-            
+        """Evaluates if any un-locked channel is currently active."""
         if self.coordinator.data and "bank" in self.coordinator.data:
             bank_str = self.coordinator.data["bank"].get("bank0_stat", "00000000")
             lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
@@ -212,23 +126,7 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        url = f"http://{self._ip}/fwi/{self._device_id}/device/ON"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = True
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Master ON action failed: %s", err)
-        self._local_state = None
+        await self._coordinator.async_send_ws_command("DEV:ON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        url = f"http://{self._ip}/fwi/{self._device_id}/device/OFF"
-        try:
-            async with self._session.post(url) as response:
-                if response.status == 200:
-                    self._local_state = False
-                    self.async_write_ha_state()
-        except Exception as err:
-            _LOGGER.error("Master OFF action failed: %s", err)
-        self._local_state = None
+        await self._coordinator.async_send_ws_command("DEV:OFF")
