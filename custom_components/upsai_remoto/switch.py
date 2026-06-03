@@ -158,13 +158,23 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Determines if the global toggle is ON based on if any outlet is active."""
+        """Determines if the global toggle is ON by looking ONLY at unlocked outlets."""
         if self._local_state is not None:
             return self._local_state
+            
         if self.coordinator.data and "bank" in self.coordinator.data:
             outlets = self.coordinator.data["bank"]
-            # If at least one single outlet is ON, treat the device master switch as active
-            return any(outlet.get("state") == "ON" for outlet in outlets)
+            
+            # Look through the data array element by element
+            for outlet in outlets:
+                # CRUCIAL FILTER: If an outlet is locked, skip it entirely!
+                if outlet.get("locked") is True:
+                    continue
+                    
+                # If we find even one single UNLOCKED outlet that is ON, return True
+                if outlet.get("state") == "ON":
+                    return True
+                    
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
