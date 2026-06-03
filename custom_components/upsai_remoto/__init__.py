@@ -14,11 +14,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up UPSAI Remoto from a config entry."""
     
-    # DYNAMIC FETCH WITH SAFE FALLBACKS:
-    # Extracts the dynamic network IP address captured by the config flow script.
-    # If the storage database value is missing, it falls back to your working IP string.
-    device_ip = entry.data.get("ip", "192.168.0.3")
-    device_id = entry.data.get("device_id", "P6IO7078YR")
+    # Secure the dynamic extraction with strict hardcoded fallbacks
+    device_ip = entry.data.get("ip") or "192.168.0.3"
+    device_id = entry.data.get("device_id") or "P6IO7078YR"
     
     session = async_get_clientsession(hass)
 
@@ -51,6 +49,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await coordinator.async_config_entry_first_refresh()
+
+    # SAFE INJECTION: Attach variables straight to the coordinator object!
+    coordinator.device_ip = device_ip
+    coordinator.device_id = device_id
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
