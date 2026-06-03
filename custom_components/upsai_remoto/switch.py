@@ -2,6 +2,7 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -28,7 +29,6 @@ async def async_setup_entry(
     entities.append(UpsaiMasterDeviceSwitch(coordinator, session, device_ip, device_id))
     async_add_entities(entities)
 
-
 class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Power Outlet Switch."""
     def __init__(self, hass, coordinator, session, ip, device_id, outlet_id):
@@ -40,7 +40,7 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         self._device_id = device_id
         self._outlet_id = outlet_id
         self._local_state = None
-        self._lock_time = 0  # Timestamp when the lock was engaged
+        self._lock_time = 0
         
         self._attr_name = f"Saída {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
@@ -54,7 +54,6 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Read state with a time-limited optimistic lock fallback."""
         server_on = False
         if self.coordinator.data and "bank" in self.coordinator.data:
             bank_str = self.coordinator.data["bank"].get("bank0_stat", "00000000")
@@ -62,22 +61,17 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
                 server_on = (bank_str[-1 - self._outlet_id] == "1")
 
         if self._local_state is not None:
-            # SAFETY FILTER: If more than 4 seconds passed, the lock expired!
             if self.hass.loop.time() - self._lock_time > 4.0:
                 self._local_state = None
                 return server_on
-
-            # If server caught up to user intent, cleanly release the lock
             if server_on == self._local_state:
                 self._local_state = None
                 return server_on
-                
             return self._local_state
             
         return server_on
 
     async def async_turn_on(self, **kwargs) -> None:
-        """Execute HTTP POST command to turn target outlet ON."""
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/ON"
         try:
             async with self._session.post(url) as response:
@@ -90,29 +84,21 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
             self._local_state = None
 
     async def async_turn_off(self, **kwargs) -> None:
-        """Execute HTTP POST command to turn target outlet OFF, checking for safety locks."""
-        # 1. Read the lock bit string out of the coordinator cache right now
+        """Execute HTTP POST command checking for lock blocks BEFORE hitting the network."""
+        # 1. Read the lock state out of the coordinator cache right now
         is_locked = False
         if self.coordinator.data and "bank" in self.coordinator.data:
             lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
             if len(lock_str) == 8:
                 is_locked = (lock_str[-1 - self._outlet_id] == "1")
 
-        # 🚀 THE INSTANT REJECTION PATH FOR LOCKED SWITCHES
+        # 🚀 HARD INTERFACE LOCKOUT:
+        # If the outlet is locked, block the command instantly before any HTTP lag happens!
         if is_locked:
-            url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
-            try:
-                # Fire the POST action to maintain command transmission tracking logs
-                await self._session.post(url)
-            except Exception as err:
-                _LOGGER.error("Failed to send off command to locked outlet %s: %s", self._outlet_id, err)
-            
-            # FORCE INSTANT REDRAW: Tell the UI framework to cancel its automatic gray-out 
-            # and instantly re-evaluate our 'is_on' property right now.
-            self.async_write_ha_state()
-            return
+            # Raising this native error instantly freezes the toggle and cancels the animation
+            raise HomeAssistantError(f"Operação negada: A Saída {self._outlet_id} está bloqueada por segurança!")
 
-        # 🎛️ THE STANDARD ADAPTIVE LOCK PATH FOR UNLOCKED SWITCHES
+        # 🎛️ Standard execution loop for non-locked outlets
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
         try:
             async with self._session.post(url) as response:
@@ -123,6 +109,7 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         except Exception as err:
             _LOGGER.error("Failed to turn off outlet %s: %s", self._outlet_id, err)
             self._local_state = None
+
 
 class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Safety Lock Toggle."""
