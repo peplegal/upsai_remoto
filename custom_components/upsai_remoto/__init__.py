@@ -49,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
-                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
+                async with session.ws_connect(ws_url, heartbeat=5.0) as ws:
                     coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
