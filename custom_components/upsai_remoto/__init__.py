@@ -18,17 +18,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     session = async_get_clientsession(hass)
 
-    # Core system runtime state container registry mimic
     class WebSocketCoordinator:
         def __init__(self):
             self.data = {"sensors": {}, "bank": {}}
             self.device_ip = device_ip
             self.device_id = device_id
             self.listeners = []
-            self._ws = None  # Holds the live active socket connection object pointer
+            self._ws = None
 
         def async_add_listener(self, callback):
-            """Allows entities to bind UI refresh actions."""
             self.listeners.append(callback)
 
         async def async_send_ws_command(self, command_string: str):
@@ -36,7 +34,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if self._ws and not self._ws.closed:
                 try:
                     _LOGGER.info("Sending WS Command: %s", command_string)
-                    # Sends plain text directly to your Mongoose websocket_handler
                     await self._ws.send_str(command_string)
                 except Exception as err:
                     _LOGGER.error("Failed to write to WebSocket stream pipe: %s", err)
@@ -46,21 +43,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WebSocketCoordinator()
 
     async def websocket_listener_task():
-        """Maintains connection to Mongoose default /websocket route endpoint."""
+        """Maintains connection to Mongoose and handles lifecycle notifications."""
         ws_url = f"ws://{device_ip}/websocket"
         
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
                 async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
-                    coordinator._ws = ws  # Map the socket reference to our coordinator
+                    coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
-                    async for msg in ws:
+                    # 🚀 FIRE WELCOME MESSAGE IMMEDIATELY ON CONNECT
+                    await coordinator.async_send_ws_command("HA_SYSTEM:CONNECT")
+                    
+                    async Jacks in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             raw_payload = json.loads(msg.data)
                             
-                            # Standardize layout parameters mapping from your compressed payload format
                             coordinator.data = {
                                 "sensors": {
                                     "Vin": raw_payload.get("Vin", 0.0),
@@ -74,7 +73,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 }
                             }
                             
-                            # Instant UI redraw prompt trigger
                             for update_callback in coordinator.listeners:
                                 update_callback()
                                 
@@ -83,10 +81,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as err:
                 _LOGGER.error("WebSocket background task exception error: %s", err)
             
-            coordinator._ws = None  # Clear socket layout assignment on break
+            coordinator._ws = None
             await asyncio.sleep(5)
 
-    # Launch background thread daemon loop pool controller task worker
     entry.async_create_background_task(hass, websocket_listener_task(), "upsai_ws_listener")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -95,5 +92,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload entry data paths cleanly from backend loops."""
+    """Unload entry data paths cleanly and send a Goodbye notification."""
+    coordinator = hass.data[DOMAIN].get(entry.entry_id)
+    
+    # 🚀 FIRE GOODBYE MESSAGE BEFORE CLOSING THE PIPE COMPLETELY
+    if coordinator:
+        # Wrap in a fast timeout loop to ensure it fires before the platform terminates
+        try:
+            await asyncio.wait_for(coordinator.async_send_ws_command("HA_SYSTEM:DISCONNECT"), timeout=1.0)
+        except Exception:
+            pass
+
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
