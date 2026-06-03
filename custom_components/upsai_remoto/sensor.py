@@ -12,7 +12,6 @@ async def async_setup_entry(
     """Set up the UPSAI sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # Automatically generate and append the 4 sensor classes
     async_add_entities([
         UpsaiVoltageSensor(coordinator, "Vin", "Input Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
         UpsaiVoltageSensor(coordinator, "Vout", "Output Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:lightning-bolt"),
@@ -34,7 +33,9 @@ class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the current numerical reading from cache."""
-        return self.coordinator.data["sensors"].get(self._key)
+        if self.coordinator.data and "sensors" in self.coordinator.data:
+            return self.coordinator.data["sensors"].get(self._key)
+        return None
 
 class UpsaiGenericSensor(CoordinatorEntity, SensorEntity):
     """Representation of a numeric Percentage/Load Sensor."""
@@ -48,7 +49,10 @@ class UpsaiGenericSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return self.coordinator.data["sensors"].get(self._key)
+        """Return the current value from cache."""
+        if self.coordinator.data and "sensors" in self.coordinator.data:
+            return self.coordinator.data["sensors"].get(self._key)
+        return None
 
 class UpsaiTextSensor(CoordinatorEntity, SensorEntity):
     """Representation of a plain Text Status string."""
@@ -61,4 +65,7 @@ class UpsaiTextSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return self.coordinator.data["sensors"].get(self._key)
+        """Return the current value from cache."""
+        if self.coordinator.data and "sensors" in self.coordinator.data:
+            return self.coordinator.data["sensors"].get(self._key)
+        return None
