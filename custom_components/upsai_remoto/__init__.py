@@ -49,14 +49,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
-                async with session.ws_connect(ws_url, heartbeat=5.0) as ws:
+                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
                     coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
                     # 🚀 FIRE WELCOME MESSAGE IMMEDIATELY ON CONNECT
                     await coordinator.async_send_ws_command("HA_SYSTEM:CONNECT")
                     
-                    async Jacks in ws:
+                    # FIXED TYPO HERE (Changed 'Jacks' to 'for msg')
+                    async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             raw_payload = json.loads(msg.data)
                             
@@ -95,9 +96,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload entry data paths cleanly and send a Goodbye notification."""
     coordinator = hass.data[DOMAIN].get(entry.entry_id)
     
-    # 🚀 FIRE GOODBYE MESSAGE BEFORE CLOSING THE PIPE COMPLETELY
     if coordinator:
-        # Wrap in a fast timeout loop to ensure it fires before the platform terminates
         try:
             await asyncio.wait_for(coordinator.async_send_ws_command("HA_SYSTEM:DISCONNECT"), timeout=1.0)
         except Exception:
