@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name="UPSAI Data Coordinator",
         update_method=async_get_ups_data,
-        update_interval=timedelta(seconds=5),
+        update_interval=timedelta(seconds=1),
     )
 
     await coordinator.async_config_entry_first_refresh()
