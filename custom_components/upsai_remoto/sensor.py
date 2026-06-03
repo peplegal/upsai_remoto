@@ -12,29 +12,33 @@ async def async_setup_entry(
 ) -> None:
     """Set up the UPSAI sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    
+    # DYNAMIC VARIABLE FETCH: Extracts your 10-char Serial ID from Home Assistant storage
+    # If it fails to find it, it defaults back to your working baseline serial string.
+    device_id = entry.unique_id or "P6IO7078YR"
 
     async_add_entities([
-        UpsaiVoltageSensor(coordinator, "Vin", "Input Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
-        UpsaiVoltageSensor(coordinator, "Vout", "Output Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:lightning-bolt"),
-        UpsaiGenericSensor(coordinator, "Power", "Power Load", "%", "mdi:gauge"),
-        UpsaiTextSensor(coordinator, "Msg", "Status Message", "mdi:information-outline")
+        UpsaiVoltageSensor(coordinator, device_id, "Vin", "Input Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
+        UpsaiVoltageSensor(coordinator, device_id, "Vout", "Output Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:lightning-bolt"),
+        UpsaiGenericSensor(coordinator, device_id, "Power", "Power Load", "%", "mdi:gauge"),
+        UpsaiTextSensor(coordinator, device_id, "Msg", "Status Message", "mdi:information-outline")
     ])
 
 class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
     """Representation of an electrical Voltage Sensor."""
-    def __init__(self, coordinator, key, name, device_class, unit, icon):
+    def __init__(self, coordinator, device_id, key, name, device_class, unit, icon):
         super().__init__(coordinator)
         self._key = key
         self._attr_name = name
         self._attr_device_class = device_class
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
-        self._attr_unique_id = f"p6io7078yr_{key.lower()}"
+        # Dynamically inject the correct lower-case unique ID key string mapping
+        self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         
-        # This joins the entity to the master device asset registry
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
-            name="Produto UPSAI",
+            identifiers={(DOMAIN, device_id)},
+            name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
             model="FWI",
         )
@@ -47,15 +51,15 @@ class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
 
 class UpsaiGenericSensor(CoordinatorEntity, SensorEntity):
     """Representation of a numeric Percentage/Load Sensor."""
-    def __init__(self, coordinator, key, name, unit, icon):
+    def __init__(self, coordinator, device_id, key, name, unit, icon):
         super().__init__(coordinator)
         self._key = key
         self._attr_name = name
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
-        self._attr_unique_id = f"p6io7078yr_{key.lower()}"
+        self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
         )
 
     @property
@@ -66,14 +70,14 @@ class UpsaiGenericSensor(CoordinatorEntity, SensorEntity):
 
 class UpsaiTextSensor(CoordinatorEntity, SensorEntity):
     """Representation of a plain Text Status string."""
-    def __init__(self, coordinator, key, name, icon):
+    def __init__(self, coordinator, device_id, key, name, icon):
         super().__init__(coordinator)
         self._key = key
         self._attr_name = name
         self._attr_icon = icon
-        self._attr_unique_id = f"p6io7078yr_{key.lower()}"
+        self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
         )
 
     @property
