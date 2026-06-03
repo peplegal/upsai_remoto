@@ -14,17 +14,14 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the UPSAI switches from a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    config_data = hass.data[DOMAIN][entry.entry_id]
+    coordinator = config_data["coordinator"]
+    device_ip = config_data["ip"]
+    device_id = config_data["device_id"]
+    
     session = async_get_clientsession(hass)
-    
-    # SAFE ZONE: Keeping your working IP hardcoded exactly as before
-    device_ip = "192.168.0.3"
-    
-    # DYNAMIC VARIABLE FETCH: Extracts your 10-char Serial ID from Home Assistant storage
-    device_id = entry.unique_id or "P6IO7078YR"
 
     entities = []
-    # Loop from 0 to 7 to generate all 16 switches dynamically passing the device_id
     for i in range(8):
         entities.append(UpsaiOutputSwitch(coordinator, session, device_ip, device_id, i))
         entities.append(UpsaiLockSwitch(coordinator, session, device_ip, device_id, i))
@@ -41,12 +38,11 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         self._ip = ip
         self._device_id = device_id
         self._outlet_id = outlet_id
+        self._local_state = None  # Local optimistic state tracker
         
         self._attr_name = f"Saída {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
         self._attr_icon = "mdi:power-socket-us"
-        
-        # Link natively to the dynamic parent hardware registry box
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
@@ -56,7 +52,10 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Read the live state array directly from the coordinator cache."""
+        """Read state with immediate optimistic local override support."""
+        if self._local_state is not None:
+            return self._local_state
+            
         if self.coordinator.data and "bank" in self.coordinator.data:
             outlets = self.coordinator.data["bank"]
             for outlet in outlets:
@@ -69,18 +68,27 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         try:
             async with self._session.post(url) as response:
                 if response.status == 200:
-                    await self._coordinator.async_request_refresh()
+                    # 1. Update the local state instantly in memory
+                    self._local_state = True
+                    # 2. Tell the UI to redraw immediately with no network lag
+                    self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error("Failed to turn on outlet %s: %s", self._outlet_id, err)
+        finally:
+            # Clear the optimistic lock so the next 5s polling cycle resumes control
+            self._local_state = None
 
     async def async_turn_off(self, **kwargs) -> None:
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
         try:
             async with self._session.post(url) as response:
                 if response.status == 200:
-                    await self._coordinator.async_request_refresh()
+                    self._local_state = False
+                    self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error("Failed to turn off outlet %s: %s", self._outlet_id, err)
+        finally:
+            self._local_state = None
 
 
 class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
@@ -92,6 +100,7 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
         self._ip = ip
         self._device_id = device_id
         self._outlet_id = outlet_id
+        self._local_state = None
         
         self._attr_name = f"Safety Lock {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
@@ -102,7 +111,9 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Read the live lock boolean directly from the coordinator cache."""
+        if self._local_state is not None:
+            return self._local_state
+            
         if self.coordinator.data and "bank" in self.coordinator.data:
             outlets = self.coordinator.data["bank"]
             for outlet in outlets:
@@ -115,15 +126,21 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
         try:
             async with self._session.post(url) as response:
                 if response.status == 200:
-                    await self._coordinator.async_request_refresh()
+                    self._local_state = True
+                    self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error("Failed to lock outlet %s: %s", self._outlet_id, err)
+        finally:
+            self._local_state = None
 
     async def async_turn_off(self, **kwargs) -> None:
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/UNLOCK"
         try:
             async with self._session.post(url) as response:
                 if response.status == 200:
-                    await self._coordinator.async_request_refresh()
+                    self._local_state = False
+                    self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error("Failed to unlock outlet %s: %s", self._outlet_id, err)
+        finally:
+            self._local_state = None
