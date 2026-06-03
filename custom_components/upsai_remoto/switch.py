@@ -55,13 +55,18 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
+        """Read state with immediate optimistic local override support."""
         if self._local_state is not None:
             return self._local_state
+            
         if self.coordinator.data and "bank" in self.coordinator.data:
-            outlets = self.coordinator.data["bank"]
-            for outlet in outlets:
-                if outlet.get("id") == self._outlet_id:
-                    return outlet.get("state") == "ON"
+            # Pull the 8-character string token directly from the cache
+            bank_str = self.coordinator.data["bank"].get("bank0_stat", "00000000")
+            
+            # Verify the index exists and return True if it equals "1"
+            if len(bank_str) > self._outlet_id:
+                return bank_str[self._outlet_id] == "1"
+                
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -109,11 +114,13 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
     def is_on(self) -> bool:
         if self._local_state is not None:
             return self._local_state
+            
         if self.coordinator.data and "bank" in self.coordinator.data:
-            outlets = self.coordinator.data["bank"]
-            for outlet in outlets:
-                if outlet.get("id") == self._outlet_id:
-                    return outlet.get("locked") is True
+            lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
+            
+            if len(lock_str) > self._outlet_id:
+                return lock_str[self._outlet_id] == "1"
+                
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -158,21 +165,21 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Determines if the global toggle is ON by looking ONLY at unlocked outlets."""
+        """Determines if the global toggle is ON by ignoring locked elements."""
         if self._local_state is not None:
             return self._local_state
             
         if self.coordinator.data and "bank" in self.coordinator.data:
-            outlets = self.coordinator.data["bank"]
+            bank_str = self.coordinator.data["bank"].get("bank0_stat", "00000000")
+            lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
             
-            # Look through the data array element by element
-            for outlet in outlets:
-                # CRUCIAL FILTER: If an outlet is locked, skip it entirely!
-                if outlet.get("locked") is True:
+            # Loop from index 0 to 7
+            for i in range(min(len(bank_str), len(lock_str), 8)):
+                # If the safety lock is engaged ("1"), skip evaluating this channel
+                if lock_str[i] == "1":
                     continue
-                    
-                # If we find even one single UNLOCKED outlet that is ON, return True
-                if outlet.get("state") == "ON":
+                # If an unlocked channel is active ("1"), return True immediately
+                if bank_str[i] == "1":
                     return True
                     
         return False

@@ -35,7 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 
                 return {
                     "sensors": sensors_data,
-                    "bank": bank_data.get("outlets", [])
+                    "bank": bank_data
                 }
         except Exception as err:
             raise UpdateFailed(f"Error communicating with UPS device: {err}")
