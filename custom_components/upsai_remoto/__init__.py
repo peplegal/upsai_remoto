@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         url_bank = f"http://{device_ip}/fwi/{device_id}/bank/0"
         
         try:
-            async with async_timeout.timeout(4):
+            async with async_timeout.timeout(0.8):
                 async with session.get(url_sensors) as response:
                     sensors_data = await response.json()
                 
