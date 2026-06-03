@@ -77,18 +77,38 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         return server_on
 
     async def async_turn_on(self, **kwargs) -> None:
+        """Execute HTTP POST command to turn target outlet ON."""
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/ON"
         try:
             async with self._session.post(url) as response:
                 if response.status == 200:
                     self._local_state = True
-                    self._lock_time = self.hass.loop.time()  # Timestamp the lock
+                    self._lock_time = self.hass.loop.time()
                     self.async_write_ha_state()
         except Exception as err:
             _LOGGER.error("Failed to turn on outlet %s: %s", self._outlet_id, err)
             self._local_state = None
 
     async def async_turn_off(self, **kwargs) -> None:
+        """Execute HTTP POST command to turn target outlet OFF, checking for safety locks."""
+        # SMART FILTER: Read the lock bit string out of the coordinator cache right now
+        is_locked = False
+        if self.coordinator.data and "bank" in self.coordinator.data:
+            lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
+            if len(lock_str) == 8:
+                is_locked = (lock_str[-1 - self._outlet_id] == "1")
+
+        # If the hardware is locked, DO NOT engage the local state override block.
+        # Just fire the command to let the device handle it, and let the 1s loop do the talking.
+        if is_locked:
+            url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
+            try:
+                await self._session.post(url)
+            except Exception as err:
+                _LOGGER.error("Failed to send off command to locked outlet %s: %s", self._outlet_id, err)
+            return
+
+        # If it's NOT locked, proceed with our highly responsive adaptive state lock
         url = f"http://{self._ip}/fwi/{self._device_id}/output/0/{self._outlet_id}/OFF"
         try:
             async with self._session.post(url) as response:
