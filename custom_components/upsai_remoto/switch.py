@@ -17,7 +17,7 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][entry.entry_id]
     session = async_get_clientsession(hass)
     
-    # Safely pull the properties we attached to the coordinator
+    # Safely pull the properties we attached to the coordinator object
     device_ip = getattr(coordinator, "device_ip", "192.168.0.3")
     device_id = getattr(coordinator, "device_id", "P6IO7078YR")
 
@@ -51,7 +51,8 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         )
 
     @property
-    def "is_on"() -> bool:
+    def is_on(self) -> bool:
+        """Read state with immediate optimistic local override support."""
         if self._local_state is not None:
             return self._local_state
         if self.coordinator.data and "bank" in self.coordinator.data:

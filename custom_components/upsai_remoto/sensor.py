@@ -13,9 +13,8 @@ async def async_setup_entry(
     """Set up the UPSAI sensors from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
-    # DYNAMIC VARIABLE FETCH: Extracts your 10-char Serial ID from Home Assistant storage
-    # If it fails to find it, it defaults back to your working baseline serial string.
-    device_id = entry.unique_id or "P6IO7078YR"
+    # Pull the variable attached directly to the coordinator object
+    device_id = getattr(coordinator, "device_id", "P6IO7078YR")
 
     async_add_entities([
         UpsaiVoltageSensor(coordinator, device_id, "Vin", "Input Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
@@ -33,7 +32,6 @@ class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_class = device_class
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
-        # Dynamically inject the correct lower-case unique ID key string mapping
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         
         self._attr_device_info = DeviceInfo(
