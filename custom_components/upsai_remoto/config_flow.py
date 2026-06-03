@@ -16,14 +16,20 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle a flow initialized by SSDP discovery."""
-        # 1. Pull the unique hardware serial number from the XML metadata
-        self._device_id = discovery_info.upnp.get("modelNumber")
+        # 1. Pull your hardware serial ID safely
+        self._device_id = discovery_info.upnp.get("modelNumber") or discovery_info.upnp.get("serialNumber")
         
-        # 2. Extract the raw IP address out of the location URL
-        # Example: transforms "http://192.168.0" into "192.168.0.3"
-        parsed_url = urlparse(discovery_info.ssdp_location)
-        self._device_ip = parsed_url.hostname
-        
+        # 2. Extract the raw IP safely bypassing any URL variations
+        location = discovery_info.ssdp_location
+        if location:
+            if not location.startswith(("http://", "https://")):
+                # If it's a naked IP or host, map it directly
+                self._device_ip = location.split(":")[0]
+            else:
+                # If it's a full URL, parse the hostname block cleanly
+                parsed_url = urlparse(location)
+                self._device_ip = parsed_url.hostname
+
         # Set the unique ID so Home Assistant handles duplicates gracefully
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
