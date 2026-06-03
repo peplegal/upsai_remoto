@@ -1,0 +1,14 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar Produto UPSAI",
+        "description": "Deseja integrar este dispositivo UPSAI Remote ao seu Home Assistant?",
+        "data": {}
+      }
+    },
+    "abort": {
+      "already_configured": "Este dispositivo já está configurado no seu sistema."
+    }
+  }
+}
