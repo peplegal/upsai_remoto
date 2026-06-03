@@ -2,10 +2,10 @@ from homeassistant import config_entries
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.data_entry_flow import FlowResult
 
-DOMAIN = "upsai_remote"
+DOMAIN = "upsai_remoto"
 
 class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for UPSAI Remote."""
+    """Handle a config flow for UPSAI Remoto."""
     VERSION = 1
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
