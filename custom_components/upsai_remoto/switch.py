@@ -65,7 +65,7 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
             
             # Verify the index exists and return True if it equals "1"
             if len(bank_str) > self._outlet_id:
-                return bank_str[self._outlet_id] == "1"
+                return bank_str[-1 - self._outlet_id] == "1"
                 
         return False
 
@@ -119,7 +119,7 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
             lock_str = self.coordinator.data["bank"].get("bank0_lock", "00000000")
             
             if len(lock_str) > self._outlet_id:
-                return lock_str[self._outlet_id] == "1"
+                return lock_str[-1 - self._outlet_id] == "1"
                 
         return False
 
@@ -176,10 +176,10 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
             # Loop from index 0 to 7
             for i in range(min(len(bank_str), len(lock_str), 8)):
                 # If the safety lock is engaged ("1"), skip evaluating this channel
-                if lock_str[i] == "1":
+                if lock_str[-1 - i] == "1":
                     continue
                 # If an unlocked channel is active ("1"), return True immediately
-                if bank_str[i] == "1":
+                if bank_str[-1 - i] == "1":
                     return True
                     
         return False
