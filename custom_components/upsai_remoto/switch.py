@@ -14,11 +14,12 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the UPSAI switches from a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    session = async_get_clientsession(hass)
+    config_data = hass.data[DOMAIN][entry.entry_id]
+    coordinator = config_data["coordinator"]
+    device_ip = config_data["ip"]
+    device_id = config_data["device_id"]
     
-    device_ip = "192.168.0.3"
-    device_id = "P6IO7078YR"
+    session = async_get_clientsession(hass)
 
     entities = []
     for i in range(8):
@@ -42,7 +43,10 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
         self._attr_icon = "mdi:power-socket-us"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
+            name=f"UPSAI Remote {device_id}",
+            manufacturer="UPSAI Sistemas de Energia",
+            model="FWI",
         )
 
     @property
@@ -87,7 +91,7 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
         self._attr_icon = "mdi:lock"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
         )
 
     @property
