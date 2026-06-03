@@ -14,10 +14,10 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up UPSAI Remoto from a config entry."""
     
-    # SAFE ZONE: Keeping your working IP hardcoded exactly as before
-    device_ip = "192.168.0.3"
-    
-    # DYNAMIC VARIABLE: Pulling the discovered device ID from config flow
+    # DYNAMIC FETCH WITH SAFE FALLBACKS:
+    # Extracts the dynamic network IP address captured by the config flow script.
+    # If the storage database value is missing, it falls back to your working IP string.
+    device_ip = entry.data.get("ip", "192.168.0.3")
     device_id = entry.data.get("device_id", "P6IO7078YR")
     
     session = async_get_clientsession(hass)
@@ -29,15 +29,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         try:
             async with async_timeout.timeout(4):
-                # 1. Fetch live telemetry metrics
                 async with session.get(url_sensors) as response:
                     sensors_data = await response.json()
                 
-                # 2. Fetch active output/lock bank array statuses
                 async with session.get(url_bank) as response:
                     bank_data = await response.json()
                 
-                # Combine both payloads into a unified data dictionary
                 return {
                     "sensors": sensors_data,
                     "bank": bank_data.get("outlets", [])
@@ -45,7 +42,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             raise UpdateFailed(f"Error communicating with UPS device: {err}")
 
-    # Initialize the coordinator to poll your device every 5 seconds
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
@@ -54,13 +50,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         update_interval=timedelta(seconds=5),
     )
 
-    # Fetch initial data on boot before completing setup
     await coordinator.async_config_entry_first_refresh()
 
-    # RESTORED BASELINE LINE: Keep the raw coordinator object in the array slot
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Tell Home Assistant to forward this setup to our upcoming sensor/switch files
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch"])
     return True
 
