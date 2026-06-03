@@ -10,22 +10,24 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle a flow initialized by SSDP discovery."""
-        # Pulls your unique hardware serial number from the XML metadata
+        # Extract the dynamic 10-character serial from UPnP metadata
         device_id = discovery_info.upnp.get("modelNumber")
-        device_ip = discovery_info.ssdp_location
         
-        # Sets the unique ID so Home Assistant handles duplicates gracefully
         await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured()
 
-        # Passes variables into the visual user setup form parameters
         self.context["title_placeholders"] = {"name": f"UPSAI ({device_id})"}
         
-        return await self.async_step_user()
+        # Move forward automatically to user confirmation
+        return await self.async_step_user(user_input={"device_id": device_id})
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the final user step to confirm setup."""
         if user_input is not None:
-            return self.async_create_entry(title="UPSAI Remoto", data={})
+            # Explicitly save the dynamic device_id into entry memory block
+            return self.async_create_entry(
+                title="UPSAI Remoto", 
+                data={"device_id": user_input.get("device_id")}
+            )
             
         return self.async_show_form(step_id="user")
