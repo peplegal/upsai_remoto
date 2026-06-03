@@ -17,10 +17,14 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][entry.entry_id]
     session = async_get_clientsession(hass)
     
+    # SAFE ZONE: Keeping your working IP hardcoded exactly as before
     device_ip = "192.168.0.3"
-    device_id = "P6IO7078YR"
+    
+    # DYNAMIC VARIABLE FETCH: Extracts your 10-char Serial ID from Home Assistant storage
+    device_id = entry.unique_id or "P6IO7078YR"
 
     entities = []
+    # Loop from 0 to 7 to generate all 16 switches dynamically passing the device_id
     for i in range(8):
         entities.append(UpsaiOutputSwitch(coordinator, session, device_ip, device_id, i))
         entities.append(UpsaiLockSwitch(coordinator, session, device_ip, device_id, i))
@@ -41,12 +45,18 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = f"Saída {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
         self._attr_icon = "mdi:power-socket-us"
+        
+        # Link natively to the dynamic parent hardware registry box
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
+            name=f"UPSAI Remote {device_id}",
+            manufacturer="UPSAI Sistemas de Energia",
+            model="FWI",
         )
 
     @property
     def is_on(self) -> bool:
+        """Read the live state array directly from the coordinator cache."""
         if self.coordinator.data and "bank" in self.coordinator.data:
             outlets = self.coordinator.data["bank"]
             for outlet in outlets:
@@ -87,11 +97,12 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
         self._attr_icon = "mdi:lock"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "P6IO7078YR")},
+            identifiers={(DOMAIN, device_id)},
         )
 
     @property
     def is_on(self) -> bool:
+        """Read the live lock boolean directly from the coordinator cache."""
         if self.coordinator.data and "bank" in self.coordinator.data:
             outlets = self.coordinator.data["bank"]
             for outlet in outlets:
