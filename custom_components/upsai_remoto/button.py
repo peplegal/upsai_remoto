@@ -14,14 +14,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the UPSAI buttons from a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
     device_id = getattr(coordinator, "device_id", "P6IO7078YR")
 
     async_add_entities([UpsaiMasterUnlockButton(coordinator, device_id)])
 
 
 class UpsaiMasterUnlockButton(CoordinatorEntity, ButtonEntity):
-    """Momentary push button to send an UNLOCK instruction to the entire unit."""
+    """Momentary push button to send a prefixed UNLOCK instruction."""
     def __init__(self, coordinator, device_id):
         super().__init__(coordinator)
         self._coordinator = coordinator
@@ -35,5 +34,5 @@ class UpsaiMasterUnlockButton(CoordinatorEntity, ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        """Executes a single string write request over the open WebSocket stream channel."""
-        await self._coordinator.async_send_ws_command("DEV:UNLOCK")
+        """Executes a single string write request prefixed with HA_."""
+        await self._coordinator.async_send_ws_command("HA_DEV:UNLOCK")
