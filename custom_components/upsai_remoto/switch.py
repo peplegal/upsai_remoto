@@ -49,15 +49,12 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Read the live state array matching this outlet index out of cache."""
-        try:
-            outlets = self._coordinator.data.get("bank", [])
-            # Look up the outlet matching our ID
+        """Read the live state array directly from the flat coordinator array cache."""
+        if self.coordinator.data and "bank" in self.coordinator.data:
+            outlets = self.coordinator.data["bank"]  # Corrected line
             for outlet in outlets:
                 if outlet.get("id") == self._outlet_id:
                     return outlet.get("state") == "ON"
-        except Exception:
-            return False
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -99,14 +96,12 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """Read the live lock boolean matching this outlet index out of cache."""
-        try:
-            outlets = self._coordinator.data.get("bank", [])
+        """Read the live lock boolean directly from the flat coordinator array cache."""
+        if self.coordinator.data and "bank" in self.coordinator.data:
+            outlets = self.coordinator.data["bank"]  # Corrected line
             for outlet in outlets:
                 if outlet.get("id") == self._outlet_id:
                     return outlet.get("locked") is True
-        except Exception:
-            return False
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
