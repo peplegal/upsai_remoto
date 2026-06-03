@@ -1,6 +1,7 @@
 {
   "domain": "upsai_remoto",
   "name": "UPSAI Remoto",
+  "config_flow": true,
   "codeowners": ["@peplegal"],
   "dependencies": ["ssdp"],
   "documentation": "https://upsai.com.br",
