@@ -13,7 +13,7 @@ DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto over a bulletproof data-injected Coordinator."""
+    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection."""
     
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
@@ -25,13 +25,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         _LOGGER,
         name=f"UPSAI WS Coordinator ({device_id})",
-        update_interval=None, # Disables HTTP polling entirely
+        update_interval=None,
     )
 
-    # Inject dynamic device identifiers onto the coordinator object canvas
     coordinator.device_ip = device_ip
     coordinator.device_id = device_id
-    coordinator._ws = None  # Live socket tracking pointer
+    coordinator._ws = None
 
     async def async_send_ws_command(command_string: str):
         """Pushes pure command strings directly back down the active pipe."""
@@ -44,20 +43,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             _LOGGER.warning("Command dropped: WebSocket connection is offline.")
 
-    # Bind the sender function directly to the coordinator object asset
     coordinator.async_send_ws_command = async_send_ws_command
 
     async def websocket_listener_task():
         """Maintains the background connection and safely feeds the native cache."""
         ws_url = f"ws://{device_ip}/websocket"
         
-        # INFINITE NETWORK DAEMON LOOP: This task will run for as long as HA is booted
         while True:
             try:
                 _LOGGER.info("Attempting connection to bidirectional Mongoose WebSocket: %s", ws_url)
                 
-                # We add a 4-second timeout to the connect step itself so a dead route can't freeze the script
-                async with async_timeout.timeout(4.0) if "async_timeout" in globals() else asyncio.timeout(4.0):
+                # CLEAN NATIVE TIMEOUT FIX: Uses built-in asyncio library safely
+                async with asyncio.timeout(5.0):
                     async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
                         coordinator._ws = ws
                         _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
@@ -68,11 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         async for msg in ws:
                             if msg.type == aiohttp.WSMsgType.TEXT:
                                 parsed_json = json.loads(msg.data)
-                                
-                                # Clean up and sanitize incoming keys dynamically
                                 raw_payload = {str(k).strip(): v for k, v in parsed_json.items()}
                                 
-                                # Build the exact data structure your entities expect
                                 new_data = {
                                     "sensors": {
                                         "Vin": float(raw_payload.get("Vin", 0.0)),
@@ -86,20 +80,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                     }
                                 }
                                 
-                                # Safely updates the core cache and pushes to UI inside the main thread loop
                                 hass.loop.call_soon_threadsafe(coordinator.async_set_updated_data, new_data)
                                     
-            # 🚀 BULLETPROOF CATCH-ALL: Intercepts all timeout, host unreachable, and socket drops cleanly
             except Exception as err:
                 _LOGGER.warning("UPSAI device connection dropped or unreachable: %s. Re-trying in 5 seconds...", err)
             
-            # Reset the socket assignment pointer so commands know the channel is down
             coordinator._ws = None
-            
-            # Enforce a flat 5-second rest window before trying the network connection loop again
             await asyncio.sleep(5)
 
-    # Launch background task safely inside the container daemon pool
     entry.async_create_background_task(hass, websocket_listener_task(), "upsai_ws_listener")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
