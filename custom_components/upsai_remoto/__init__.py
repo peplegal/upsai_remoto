@@ -49,8 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
-                # Turned off explicit heartbeat tracking to bypass the rigid frame validation block
-                async with session.ws_connect(ws_url) as ws:
+                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
                     coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
@@ -59,17 +58,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     
                     async for msg in ws:
                         if msg.type in (aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY):
-                            # Convert incoming bytes/text to a clean python string
                             raw_text = str(msg.data)
                             
-                            # 🚀 BULLETPROOF TEXT PARSING LAYER:
-                            # Uses Regex to find your values directly, ignoring any missing keys or format glitches
+                            # 🚀 FIXED REGEX LAYER: Clean extraction of numeric and bitmask elements
                             vin_match = re.search(r'"Vin"\s*:\s*([\d.]+)', raw_text)
                             vout_match = re.search(r'"Vout"\s*:\s*([\d.]+)', raw_text)
                             power_match = re.search(r'"Power"\s*:\s*(\d+)', raw_text)
                             msg_match = re.search(r'"Msg"\s*:\s*"([^"]+)"', raw_text)
-                            stat_match = re.search(r'"bank0_stat"\s*:\s*"([01]+)"', raw_text)
-                            lock_match = re.search(r'"bank0_lock"\s*:\s*"([01]+)"', raw_text)
+                            
+                            # Specifically extracts exactly 8 occurrences of characters 0 or 1
+                            stat_match = re.search(r'"bank0_stat"\s*:\s*"([01]{8})"', raw_text)
+                            lock_match = re.search(r'"bank0_lock"\s*:\s*"([01]{8})"', raw_text)
                             
                             coordinator.data = {
                                 "sensors": {
