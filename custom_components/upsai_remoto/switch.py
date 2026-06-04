@@ -38,10 +38,12 @@ class UpsaiOutputSwitch(SwitchEntity):
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            model="FWI",
+            # 🚀 DYNAMIC CORRECTION: Safely extract the combined "FWI 1200" model metadata string
+            model=getattr(engine, "device_model", "Modelo Indefinido"),
         )
 
     async def async_added_to_hass(self) -> None:
+        """Register listener to redraw the UI instantly on packet arrival."""
         self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
@@ -75,7 +77,10 @@ class UpsaiLockSwitch(SwitchEntity):
         self._attr_name = f"Trava {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
         self._attr_icon = "mdi:lock"
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_id)},
+            model=getattr(engine, "device_model", "Modelo Indefinido"),
+        )
 
     async def async_added_to_hass(self) -> None:
         self._engine.async_add_listener(self.async_write_ha_state)
@@ -110,7 +115,10 @@ class UpsaiMasterDeviceSwitch(SwitchEntity):
         self._attr_name = "Dispositivo"
         self._attr_unique_id = f"{device_id.lower()}_master_device"
         self._attr_icon = "mdi:power-matrix"
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, device_id)},
+            model=getattr(engine, "device_model", "Modelo Indefinido"),
+        )
 
     async def async_added_to_hass(self) -> None:
         self._engine.async_add_listener(self.async_write_ha_state)

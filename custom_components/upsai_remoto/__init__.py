@@ -13,8 +13,21 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a pure, event-driven WebSocket pipeline where the hardware dictates the rhythm."""
     
-    device_ip = entry.data.get("ip") or "192.168.0.3"
-    device_id = entry.data.get("device_id") or "P6IO7078YR"
+    # 🚀 STRICT DYNAMIC LOOKUP: Strip out the fallback values completely
+    device_ip = entry.data.get("ip")
+    device_id = entry.data.get("device_id")
+    device_model = entry.data.get("model") or "FWI 1200"
+    
+    # 🚀 DEBUG LOGS: Print the exact variables fetched from the database
+    _LOGGER.info(
+        "UPSAI Boot Initializer -> Extracted Values from DB: IP=%s, ID=%s, Model=%s",
+        device_ip, device_id, device_model
+    )
+    
+    # Validation block: Halt execution immediately if network fields are missing
+    if not device_ip or not device_id:
+        _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
+        return False
     
     session = async_get_clientsession(hass)
 
@@ -27,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }
             self.device_ip = device_ip
             self.device_id = device_id
+            self.device_model = device_model
             self.listeners = []
             self._ws = None
 
@@ -61,10 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     # Fire welcome notification handshake
                     await engine.async_send_ws_command("HA_SYSTEM:CONNECT")
                     
-                    # 🚀 PURE ASYNC STREAM CONSUMPTION:
-                    # This loop is 100% reactive. If your device pushes 50 packets in 1 second, 
-                    # it updates 50 times. If your device stays silent for 1 hour, this task sleeps
-                    # consumes 0% CPU, and executes no loops.
+                    # PURE ASYNC STREAM CONSUMPTION:
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             parsed_json = json.loads(msg.data)
@@ -84,18 +95,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 }
                             }
                             
-                            # 🚀 INSTANT EVENT DISPATCH:
-                            # Force every single entity to pull the raw memory block and update the frontend 
-                            # dashboard right now, running safely inside the master core thread loop.
+                            # INSTANT EVENT DISPATCH:
                             for update_callback in engine.listeners:
                                 hass.loop.call_soon_threadsafe(update_callback)
                                 
             except Exception as err:
                 _LOGGER.warning("Connection dropped or unreachable: %s. Re-linking in 5 seconds...", err)
                 
-                # 🚀 IMMEDIATE RE-DRAW SIGNAL FOR DISCONNECTION:
-                # Force every single entity to evaluate its 'available' property right now 
-                # the exact millisecond the TCP/IP pipeline drops!
+                # IMMEDIATE RE-DRAW SIGNAL FOR DISCONNECTION:
                 engine._ws = None  # Clear the socket handle first
                 for update_callback in engine.listeners:
                     hass.loop.call_soon_threadsafe(update_callback)            
@@ -108,7 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = engine
     
-    # This securely registers the dynamic DHCP tracking callback routine
+    # Securely registers the dynamic DHCP tracking callback routine using old core naming
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))    
 
     # Forward the setup configuration straight to your entity platforms
