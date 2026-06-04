@@ -39,8 +39,7 @@ class UpsaiMasterUnlockButton(ButtonEntity):
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            # 🚀 DYNAMIC EXTRACTION: Links the model variant "FWI 1200" directly to the card
-            model=getattr(engine, "device_model", "Modelo Indefinido"),
+            model="FWI",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -59,16 +58,16 @@ class UpsaiOutletRebootButton(ButtonEntity):
         self._device_id = device_id
         self._outlet_id = outlet_id
         
+        # User-friendly description that maps seamlessly to the Device Card registry
         self._attr_name = f"_Reiniciar {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_reboot0_{outlet_id}"
         self._attr_icon = "mdi:restart"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            model=getattr(engine, "device_model", "Modelo Indefinido"),
-        )
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
+        """Register our redraw hook directly into the custom WebSocket engine pool."""
         self._engine.async_add_listener(self.async_write_ha_state)
 
     async def async_press(self) -> None:
+        """Fires the precise upstream REBOOT text token down the open pipe string channel."""
         await self._engine.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:REBOOT")

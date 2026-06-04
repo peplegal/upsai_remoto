@@ -1,68 +1,53 @@
-import logging
 from homeassistant import config_entries
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.data_entry_flow import FlowResult
 
 DOMAIN = "upsai_remoto"
-_LOGGER = logging.getLogger(__name__)
 
 class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for UPSAI Remote."""
     VERSION = 1
 
-    def __init__(self):
-        """Initialize the tracking variables inside the class context layer."""
-        self._device_id = None
-        self._device_ip = None
-        self._model_name = "FWI"
-        self._model_number = "1200"
-
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle a flow initialized by SSDP discovery."""
-        # 1. Safely extract all required XML string tags on the very first network touch
-        self._device_id = discovery_info.upnp.get("serialNumber") or discovery_info.upnp.get("modelNumber")
-        self._device_ip = discovery_info.ssdp_headers.get("_host")
-        self._model_name = discovery_info.upnp.get("modelName") or "FWI"
-        self._model_number = discovery_info.upnp.get("modelNumber") or "1200"
+        # 1. Pull the unique hardware serial number from the UPnP metadata
+        device_id = discovery_info.upnp.get("serialNumber")
         
-        # DHCP TRACKING BALWARK:
+        # 2. Extract the clean, raw IP string directly out of the network headers
+        # This safely pulls a pure string like "192.168.0.3" bypassing URL splitting bugs
+        device_ip = discovery_info.ssdp_headers.get("_host")
+        
+        # 🚀 DHCP TRACKING BALWARK:
+        # If the unique serial ID is already configured in Home Assistant's database,
+        # intercept the event, check if the IP has shifted, update it, and exit cleanly!
         current_entry = self._async_current_entry()
-        if current_entry and current_entry.unique_id == self._device_id:
-            if current_entry.data.get("ip") != self._device_ip:
-                _LOGGER.info("SSDP network update: Device %s moved to new IP %s", self._device_id, self._device_ip)
+        if current_entry and current_entry.unique_id == device_id:
+            if current_entry.data.get("ip") != device_ip:
+                _LOGGER.info("SSDP network update: Device %s moved to new IP %s", device_id, device_ip)
+                # Overwrite the old data dictionary entry values in the secure database
                 self.hass.config_entries.async_update_entry(
                     current_entry, 
-                    data={**current_entry.data, "ip": self._device_ip}
+                    data={**current_entry.data, "ip": device_ip}
                 )
             return self.async_abort(reason="already_configured")
                         
-        await self.async_set_unique_id(self._device_id)
+        await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured()
 
-        self.context["title_placeholders"] = {"name": f"UPSAI ({self._device_id})"}
+        self.context["title_placeholders"] = {"name": f"UPSAI ({device_id})"}
         
-        # 🚀 FIX: Pass the dynamically discovered data dictionary directly into the next step
-        return await self.async_step_user(user_input={
-            "device_id": self._device_id,
-            "ip": self._device_ip
-        })
+        # Pass both clean variables forward to the confirmation save step
+        return await self.async_step_user(user_input={"device_id": device_id, "ip": device_ip})
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the final user step to confirm setup."""
         if user_input is not None:
-            # 🚀 FIX: Pull the verified variables out of the user input dictionary context safely
-            device_id = user_input.get("device_id") or self._device_id
-            device_ip = user_input.get("ip") or self._device_ip
-            
-            # Concatenate both saved string variables cleanly to form the complete profile text
-            full_model_string = f"{self._model_name} {self._model_number}".strip()
-
+            # Securely save the dynamic IP and Serial into the config entry storage registry
             return self.async_create_entry(
-                title=f"UPSAI Remote ({device_id})", 
+                title=f"UPSAI Remote ({user_input.get('device_id')})", 
                 data={
-                    "device_id": device_id,
-                    "ip": device_ip,         # This is now guaranteed to write the true dynamic IP!
-                    "model": full_model_string
+                    "device_id": user_input.get("device_id"),
+                    "ip": user_input.get("ip")
                 }
             )
             

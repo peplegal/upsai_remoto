@@ -35,12 +35,10 @@ class UpsaiVoltageSensor(SensorEntity):
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            # 🚀 DYNAMIC EXTRACTION: Links the model variant "FWI 1200" directly to the card
-            model=getattr(engine, "device_model", "Modelo Indefinido"),
+            model="FWI",
         )
 
     async def async_added_to_hass(self) -> None:
-        """Register listener to redraw the UI instantly on packet arrival."""
         self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
@@ -65,10 +63,7 @@ class UpsaiGenericSensor(SensorEntity):
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            model=getattr(engine, "device_model", "Modelo Indefinido"),
-        )
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
         self._engine.async_add_listener(self.async_write_ha_state)
@@ -94,10 +89,7 @@ class UpsaiTextSensor(SensorEntity):
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            model=getattr(engine, "device_model", "Modelo Indefinido"),
-        )
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
         self._engine.async_add_listener(self.async_write_ha_state)
