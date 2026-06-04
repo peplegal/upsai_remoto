@@ -2,7 +2,7 @@ import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.add_entities import AddEntitiesCallback
+from homeassistant.helpers.entity_platform  import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
 
 DOMAIN = "upsai_remoto"
