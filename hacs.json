@@ -1,0 +1,6 @@
+{
+  "name": "UPSAI Remoto",
+  "render_readme": true,
+  "country": ["BR"],
+  "homeassistant": "2026.5.0"
+}
