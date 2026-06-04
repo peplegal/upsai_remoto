@@ -11,7 +11,7 @@ DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection."""
+    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection.""" 
     
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
@@ -49,18 +49,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
-                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
+                async with session.ws_connect(ws_url, heartbeat=5.0) as ws:
                     coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
-                    # 🚀 FIRE WELCOME MESSAGE IMMEDIATELY ON CONNECT
+                    # Fire welcome packet sequence 
                     await coordinator.async_send_ws_command("HA_SYSTEM:CONNECT")
                     
-                    # FIXED TYPO HERE (Changed 'Jacks' to 'for msg')
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             raw_payload = json.loads(msg.data)
                             
+                            # 🚀 THE TARGET FIX: Flatten the dictionary mapping block completely
                             coordinator.data = {
                                 "sensors": {
                                     "Vin": raw_payload.get("Vin", 0.0),
@@ -74,6 +74,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 }
                             }
                             
+                            # Execute immediate interface updates across all registered objects
                             for update_callback in coordinator.listeners:
                                 update_callback()
                                 
