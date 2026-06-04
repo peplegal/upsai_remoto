@@ -72,7 +72,7 @@ class UpsaiLockSwitch(SwitchEntity):
         self._device_id = device_id
         self._outlet_id = outlet_id
         
-        self._attr_name = f"Safety Lock {outlet_id}"
+        self._attr_name = f"Trava {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
         self._attr_icon = "mdi:lock"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})

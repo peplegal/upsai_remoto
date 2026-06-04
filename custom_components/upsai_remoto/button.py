@@ -32,7 +32,7 @@ class UpsaiMasterUnlockButton(ButtonEntity):
         self._engine = engine
         self._device_id = device_id
         
-        self._attr_name = "Destravar"
+        self._attr_name = "destravar"
         self._attr_unique_id = f"{device_id.lower()}_master_unlock"
         self._attr_icon = "mdi:lock-open-check"
         self._attr_device_info = DeviceInfo(
@@ -59,7 +59,7 @@ class UpsaiOutletRebootButton(ButtonEntity):
         self._outlet_id = outlet_id
         
         # User-friendly description that maps seamlessly to the Device Card registry
-        self._attr_name = f"Reiniciar {outlet_id}"
+        self._attr_name = f"reiniciar {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_reboot0_{outlet_id}"
         self._attr_icon = "mdi:restart"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})

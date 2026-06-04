@@ -14,10 +14,10 @@ async def async_setup_entry(
     device_id = getattr(engine, "device_id", "P6IO7078YR")
 
     async_add_entities([
-        UpsaiVoltageSensor(engine, device_id, "Vin", "Input Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
-        UpsaiVoltageSensor(engine, device_id, "Vout", "Output Voltage", SensorDeviceClass.VOLTAGE, "V", "mdi:lightning-bolt"),
-        UpsaiGenericSensor(engine, device_id, "Power", "Power Load", "%", "mdi:gauge"),
-        UpsaiTextSensor(engine, device_id, "Msg", "Status Message", "mdi:information-outline")
+        UpsaiVoltageSensor(engine, device_id, "Vin", "Rede Elétrica", SensorDeviceClass.VOLTAGE, "V", "mdi:sine-wave"),
+        UpsaiVoltageSensor(engine, device_id, "Vout", "Saída", SensorDeviceClass.VOLTAGE, "V", "mdi:lightning-bolt"),
+        UpsaiGenericSensor(engine, device_id, "Power", "Consumo", "%", "mdi:gauge"),
+        UpsaiTextSensor(engine, device_id, "Msg", "Estado", "mdi:information-outline")
     ])
 
 
