@@ -3,7 +3,6 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
 DOMAIN = "upsai_remoto"
@@ -13,22 +12,23 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the UPSAI switches from a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    device_id = getattr(coordinator, "device_id", "P6IO7078YR")
+    # Safely extract our custom EventDrivenDeviceEngine object
+    engine = hass.data[DOMAIN][entry.entry_id]
+    device_id = getattr(engine, "device_id", "P6IO7078YR")
 
     entities = []
     for i in range(8):
-        entities.append(UpsaiOutputSwitch(coordinator, device_id, i))
-        entities.append(UpsaiLockSwitch(coordinator, device_id, i))
+        entities.append(UpsaiOutputSwitch(engine, device_id, i))
+        entities.append(UpsaiLockSwitch(engine, device_id, i))
 
-    entities.append(UpsaiMasterDeviceSwitch(coordinator, device_id))
+    entities.append(UpsaiMasterDeviceSwitch(engine, device_id))
     async_add_entities(entities)
 
-class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
+
+class UpsaiOutputSwitch(SwitchEntity):
     """Representation of an individual Power Outlet Switch."""
-    def __init__(self, coordinator, device_id, outlet_id):
-        super().__init__(coordinator)
-        self._coordinator = coordinator
+    def __init__(self, engine, device_id, outlet_id):
+        self._engine = engine
         self._device_id = device_id
         self._outlet_id = outlet_id
         
@@ -44,27 +44,28 @@ class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register listener to redraw the UI instantly on packet arrival."""
-        self._coordinator.async_add_listener(self.async_write_ha_state)
+        self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:
-        if self._coordinator.data and "bank" in self._coordinator.data:
-            bank_str = self._coordinator.data["bank"].get("bank0_stat", "00000000")
+        """Read state right-to-left from the engine memory state tracker cache."""
+        if self._engine.data and "bank" in self._engine.data:
+            bank_str = self._engine.data["bank"].get("bank0_stat", "00000000")
             if len(bank_str) == 8:
                 return bank_str[-1 - self._outlet_id] == "1"
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:ON")
+        await self._engine.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:ON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:OFF")
+        await self._engine.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:OFF")
 
-class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
+
+class UpsaiLockSwitch(SwitchEntity):
     """Representation of an individual Safety Lock Toggle."""
-    def __init__(self, coordinator, device_id, outlet_id):
-        super().__init__(coordinator)
-        self._coordinator = coordinator
+    def __init__(self, engine, device_id, outlet_id):
+        self._engine = engine
         self._device_id = device_id
         self._outlet_id = outlet_id
         
@@ -74,27 +75,27 @@ class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
-        self._coordinator.async_add_listener(self.async_write_ha_state)
+        self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:
-        if self._coordinator.data and "bank" in self._coordinator.data:
-            lock_str = self._coordinator.data["bank"].get("bank0_lock", "00000000")
+        if self._engine.data and "bank" in self._engine.data:
+            lock_str = self._engine.data["bank"].get("bank0_lock", "00000000")
             if len(lock_str) == 8:
                 return lock_str[-1 - self._outlet_id] == "1"
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:LOCKON")
+        await self._engine.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:LOCKON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:UNLOCK")
+        await self._engine.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:UNLOCK")
 
-class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
+
+class UpsaiMasterDeviceSwitch(SwitchEntity):
     """Representation of the Global Device Master Toggle Switch."""
-    def __init__(self, coordinator, device_id):
-        super().__init__(coordinator)
-        self._coordinator = coordinator
+    def __init__(self, engine, device_id):
+        self._engine = engine
         self._device_id = device_id
         
         self._attr_name = "Dispositivo"
@@ -103,13 +104,13 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
-        self._coordinator.async_add_listener(self.async_write_ha_state)
+        self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:
-        if self._coordinator.data and "bank" in self._coordinator.data:
-            bank_str = self._coordinator.data["bank"].get("bank0_stat", "00000000")
-            lock_str = self._coordinator.data["bank"].get("bank0_lock", "00000000")
+        if self._engine.data and "bank" in self._engine.data:
+            bank_str = self._engine.data["bank"].get("bank0_stat", "00000000")
+            lock_str = self._engine.data["bank"].get("bank0_lock", "00000000")
             
             if len(bank_str) == 8 and len(lock_str) == 8:
                 for i in range(8):
@@ -120,7 +121,7 @@ class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
         return False
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command("HA_DEV:ON")
+        await self._engine.async_send_ws_command("HA_DEV:ON")
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._coordinator.async_send_ws_command("HA_DEV:OFF")
+        await self._engine.async_send_ws_command("HA_DEV:OFF")
