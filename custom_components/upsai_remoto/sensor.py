@@ -10,7 +10,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the UPSAI sensors from a config entry."""
-    # Safely extract our custom EventDrivenDeviceEngine object
     engine = hass.data[DOMAIN][entry.entry_id]
     device_id = getattr(engine, "device_id", "P6IO7078YR")
 
@@ -40,12 +39,18 @@ class UpsaiVoltageSensor(SensorEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        """Register listener to redraw the UI instantly on packet arrival."""
         self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
+    def available(self) -> bool:
+        """🚀 THE VISUAL PROTECTION: Check if the WebSocket pipeline is alive."""
+        return self._engine._ws is not None and not self._engine._ws.closed
+
+    @property
     def native_value(self):
-        """Read values directly from the event-driven engine memory space."""
+        """Read values directly from the engine memory space safely."""
+        if not self.available:
+            return 0.0  # Force zero when offline
         if self._engine.data and "sensors" in self._engine.data:
             return self._engine.data["sensors"].get(self._key)
         return None
@@ -66,7 +71,13 @@ class UpsaiGenericSensor(SensorEntity):
         self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
+    def available(self) -> bool:
+        return self._engine._ws is not None and not self._engine._ws.closed
+
+    @property
     def native_value(self):
+        if not self.available:
+            return 0
         if self._engine.data and "sensors" in self._engine.data:
             return self._engine.data["sensors"].get(self._key)
         return None
@@ -86,7 +97,13 @@ class UpsaiTextSensor(SensorEntity):
         self._engine.async_add_listener(self.async_write_ha_state)
 
     @property
+    def available(self) -> bool:
+        return self._engine._ws is not None and not self._engine._ws.closed
+
+    @property
     def native_value(self):
+        if not self.available:
+            return "Dispositivo Offline (Sem Conexão)"
         if self._engine.data and "sensors" in self._engine.data:
             return self._engine.data["sensors"].get(self._key)
         return None

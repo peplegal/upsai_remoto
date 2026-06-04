@@ -92,7 +92,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 
             except Exception as err:
                 _LOGGER.warning("Connection dropped or unreachable: %s. Re-linking in 5 seconds...", err)
-            
+                
+                # 🚀 IMMEDIATE RE-DRAW SIGNAL FOR DISCONNECTION:
+                # Force every single entity to evaluate its 'available' property right now 
+                # the exact millisecond the TCP/IP pipeline drops!
+                engine._ws = None  # Clear the socket handle first
+                for update_callback in engine.listeners:
+                    hass.loop.call_soon_threadsafe(update_callback)            
+                    
             engine._ws = None
             await asyncio.sleep(5)  # Reconnect cooldown timer window
 
