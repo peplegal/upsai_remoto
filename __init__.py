@@ -1,0 +1,117 @@
+import asyncio
+import logging
+import json
+import aiohttp
+
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+DOMAIN = "upsai_remoto"
+_LOGGER = logging.getLogger(__name__)
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up a pure, event-driven WebSocket pipeline where the hardware dictates the rhythm."""
+    
+    device_ip = entry.data.get("ip") or "192.168.0.3"
+    device_id = entry.data.get("device_id") or "P6IO7078YR"
+    
+    session = async_get_clientsession(hass)
+
+    class EventDrivenDeviceEngine:
+        def __init__(self):
+            # Pristine baseline memory state storage
+            self.data = {
+                "sensors": {"Vin": 0.0, "Vout": 0.0, "Power": 0, "Msg": "Iniciando Canal..."},
+                "bank": {"bank0_stat": "00000000", "bank0_lock": "00000000"}
+            }
+            self.device_ip = device_ip
+            self.device_id = device_id
+            self.listeners = []
+            self._ws = None
+
+        def async_add_listener(self, callback):
+            """Allows entities (sensors/switches) to bind their redraw hooks."""
+            self.listeners.append(callback)
+
+        async def async_send_ws_command(self, command_string: str):
+            """Event-Driven Upstream: Fires text commands instantly down the pipe on user click."""
+            if self._ws and not self._ws.closed:
+                try:
+                    _LOGGER.info("Sending Event Upstream: %s", command_string)
+                    await self._ws.send_str(command_string)
+                except Exception as err:
+                    _LOGGER.error("Failed to write to WebSocket stream pipe: %s", err)
+            else:
+                _LOGGER.warning("Command dropped: Device is currently offline.")
+
+    engine = EventDrivenDeviceEngine()
+
+    async def pure_websocket_listener_task():
+        """Asynchronous worker that blocks on incoming network sockets until hardware pushes data."""
+        ws_url = f"ws://{device_ip}/websocket"
+        
+        while True:
+            try:
+                _LOGGER.info("Opening listener pipe to Mongoose: %s", ws_url)
+                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
+                    engine._ws = ws
+                    _LOGGER.info("Event-driven pipeline established with Mongoose firmware!")
+                    
+                    # Fire welcome notification handshake
+                    await engine.async_send_ws_command("HA_SYSTEM:CONNECT")
+                    
+                    # 🚀 PURE ASYNC STREAM CONSUMPTION:
+                    # This loop is 100% reactive. If your device pushes 50 packets in 1 second, 
+                    # it updates 50 times. If your device stays silent for 1 hour, this task sleeps
+                    # consumes 0% CPU, and executes no loops.
+                    async for msg in ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            parsed_json = json.loads(msg.data)
+                            raw_payload = {str(k).strip(): v for k, v in parsed_json.items()}
+                            
+                            # Parse raw payload parameters directly into memory
+                            engine.data = {
+                                "sensors": {
+                                    "Vin": float(raw_payload.get("Vin", 0.0)),
+                                    "Vout": float(raw_payload.get("Vout", 0.0)),
+                                    "Power": int(raw_payload.get("Power", 0)),
+                                    "Msg": str(raw_payload.get("Msg", "WS Telemetry Active")).strip()
+                                },
+                                "bank": {
+                                    "bank0_stat": str(raw_payload.get("bank0_stat", "00000000")).strip(),
+                                    "bank0_lock": str(raw_payload.get("bank0_lock", "00000000")).strip()
+                                }
+                            }
+                            
+                            # 🚀 INSTANT EVENT DISPATCH:
+                            # Force every single entity to pull the raw memory block and update the frontend 
+                            # dashboard right now, running safely inside the master core thread loop.
+                            for update_callback in engine.listeners:
+                                hass.loop.call_soon_threadsafe(update_callback)
+                                
+            except Exception as err:
+                _LOGGER.warning("Connection dropped or unreachable: %s. Re-linking in 5 seconds...", err)
+            
+            engine._ws = None
+            await asyncio.sleep(5)  # Reconnect cooldown timer window
+
+    # Spin up the background listener task safely in the Home Assistant core pool
+    entry.async_create_background_task(hass, pure_websocket_listener_task(), "upsai_ws_listener")
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = engine
+
+    # Forward the setup configuration straight to your entity platforms
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch", "button"])
+    return True
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload integration entry cleanly and notify the hardware."""
+    engine = hass.data[DOMAIN].get(entry.entry_id)
+    if engine and engine._ws and not engine._ws.closed:
+        try:
+            await asyncio.wait_for(engine.async_send_ws_command("HA_SYSTEM:DISCONNECT"), timeout=1.0)
+            await engine._ws.close()
+        except Exception:
+            pass
+    return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
