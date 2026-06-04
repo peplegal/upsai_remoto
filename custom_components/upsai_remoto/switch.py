@@ -46,7 +46,6 @@ class UpsaiOutputSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        """🚀 THE VISUAL PROTECTION: Grays out the switch entirely when offline."""
         return self._engine._ws is not None and not self._engine._ws.closed
 
     @property

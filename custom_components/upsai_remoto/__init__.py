@@ -107,10 +107,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_create_background_task(hass, pure_websocket_listener_task(), "upsai_ws_listener")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = engine
+    
+    # This securely registers the dynamic DHCP tracking callback routine
+    entry.async_on_unload(entry.add_to_updates_listener(async_reload_entry))    
 
     # Forward the setup configuration straight to your entity platforms
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch", "button"])
     return True
+
+    
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload config entry when an automatic network change is detected."""
+    _LOGGER.info("Reloading UPSAI Remoto configuration entry due to an IP address update.")
+    await hass.config_entries.async_reload(entry.entry_id)    
+
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload integration entry cleanly and notify the hardware."""

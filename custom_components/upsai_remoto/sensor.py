@@ -43,14 +43,12 @@ class UpsaiVoltageSensor(SensorEntity):
 
     @property
     def available(self) -> bool:
-        """🚀 THE VISUAL PROTECTION: Check if the WebSocket pipeline is alive."""
         return self._engine._ws is not None and not self._engine._ws.closed
 
     @property
     def native_value(self):
-        """Read values directly from the engine memory space safely."""
         if not self.available:
-            return 0.0  # Force zero when offline
+            return 0.0
         if self._engine.data and "sensors" in self._engine.data:
             return self._engine.data["sensors"].get(self._key)
         return None

@@ -17,6 +17,20 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # This safely pulls a pure string like "192.168.0.3" bypassing URL splitting bugs
         device_ip = discovery_info.ssdp_headers.get("_host")
         
+        # 🚀 DHCP TRACKING BALWARK:
+        # If the unique serial ID is already configured in Home Assistant's database,
+        # intercept the event, check if the IP has shifted, update it, and exit cleanly!
+        current_entry = self._async_current_entry()
+        if current_entry and current_entry.unique_id == device_id:
+            if current_entry.data.get("ip") != device_ip:
+                _LOGGER.info("SSDP network update: Device %s moved to new IP %s", device_id, device_ip)
+                # Overwrite the old data dictionary entry values in the secure database
+                self.hass.config_entries.async_update_entry(
+                    current_entry, 
+                    data={**current_entry.data, "ip": device_ip}
+                )
+            return self.async_abort(reason="already_configured")
+                        
         await self.async_set_unique_id(device_id)
         self._abort_if_unique_id_configured()
 
