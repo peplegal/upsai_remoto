@@ -25,16 +25,19 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._model_name = discovery_info.upnp.get("modelName") or "FWI"
         self._model_number = discovery_info.upnp.get("modelNumber") or "1200"
         
-        # DHCP TRACKING SHIELD: Update the registry entry automatically if the IP changes
-        current_entry = self._async_current_entry()
-        if current_entry and current_entry.unique_id == self._device_id:
-            if current_entry.data.get("ip") != self._device_ip:
-                _LOGGER.info("SSDP network update: Device %s moved to new IP %s", self._device_id, self._device_ip)
-                self.hass.config_entries.async_update_entry(
-                    current_entry, 
-                    data={**current_entry.data, "ip": self._device_ip}
-                )
-            return self.async_abort(reason="already_configured")
+        if not self._device_id or not self._device_ip:
+            return self.async_abort(reason="unknown_device")
+
+        # 🚀 FIXED DHCP SHIELD LOOP: Safely iterate through existing entries using plural method
+        for entry in self._async_current_entries():
+            if entry.unique_id == self._device_id:
+                if entry.data.get("ip") != self._device_ip:
+                    _LOGGER.info("SSDP network update: Device %s moved to new IP %s", self._device_id, self._device_ip)
+                    self.hass.config_entries.async_update_entry(
+                        entry, 
+                        data={**entry.data, "ip": self._device_ip}
+                    )
+                return self.async_abort(reason="already_configured")
                         
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
@@ -56,15 +59,12 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the final user step to confirm setup."""
         # Recover our verified data out of the secure context dictionary layer
         discovery_data = self.context.get("discovery_info", {})
-        device_id = discovery_data.get("device_id")
-        device_ip = discovery_data.get("ip")
+        device_id = discovery_data.get("device_id") or self._device_id
+        device_ip = discovery_data.get("ip") or self._device_ip
         
-        # Security guard block: stop manual blank configuration attempts
         if not device_id or not device_ip:
             return self.async_abort(reason="cannot_connect")
 
-        # 🚀 THE CRITICAL FIX: Only save the entry when user_input is NOT None.
-        # This guarantees it waits for the user to physically click "Submit" on the form wizard screen!
         if user_input is not None:
             model_name = discovery_data.get("model_name") or "FWI"
             model_number = discovery_data.get("model_number") or "1200"
@@ -76,7 +76,7 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 title=f"UPSAI Remote ({device_id})", 
                 data={
                     "device_id": device_id,
-                    "ip": device_ip,         # Written safely with 100% data persistence!
+                    "ip": device_ip,
                     "model": full_model_string
                 }
             )
