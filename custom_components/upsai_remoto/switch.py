@@ -24,20 +24,11 @@ async def async_setup_entry(
     entities.append(UpsaiMasterDeviceSwitch(coordinator, device_id))
     async_add_entities(entities)
 
-class UpsaiSwitchBase(CoordinatorEntity, SwitchEntity):
-    """Base switch to force real-time WebSocket redraw triggers."""
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._coordinator = coordinator
-
-    async def async_added_to_hass(self) -> None:
-        """Register listener to redraw the UI instantly on packet arrival."""
-        self._coordinator.async_add_listener(self.async_write_ha_state)
-
-class UpsaiOutputSwitch(UpsaiSwitchBase):
+class UpsaiOutputSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Power Outlet Switch."""
     def __init__(self, coordinator, device_id, outlet_id):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._device_id = device_id
         self._outlet_id = outlet_id
         
@@ -50,6 +41,10 @@ class UpsaiOutputSwitch(UpsaiSwitchBase):
             manufacturer="UPSAI Sistemas de Energia",
             model="FWI",
         )
+
+    async def async_added_to_hass(self) -> None:
+        """Register listener to redraw the UI instantly on packet arrival."""
+        self._coordinator.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:
@@ -65,10 +60,11 @@ class UpsaiOutputSwitch(UpsaiSwitchBase):
     async def async_turn_off(self, **kwargs) -> None:
         await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:OFF")
 
-class UpsaiLockSwitch(UpsaiSwitchBase):
+class UpsaiLockSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of an individual Safety Lock Toggle."""
     def __init__(self, coordinator, device_id, outlet_id):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._device_id = device_id
         self._outlet_id = outlet_id
         
@@ -76,6 +72,9 @@ class UpsaiLockSwitch(UpsaiSwitchBase):
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
         self._attr_icon = "mdi:lock"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
+
+    async def async_added_to_hass(self) -> None:
+        self._coordinator.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:
@@ -91,16 +90,20 @@ class UpsaiLockSwitch(UpsaiSwitchBase):
     async def async_turn_off(self, **kwargs) -> None:
         await self._coordinator.async_send_ws_command(f"HA_OUT0-{self._outlet_id}:UNLOCK")
 
-class UpsaiMasterDeviceSwitch(UpsaiSwitchBase):
+class UpsaiMasterDeviceSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of the Global Device Master Toggle Switch."""
     def __init__(self, coordinator, device_id):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._device_id = device_id
         
         self._attr_name = "Dispositivo"
         self._attr_unique_id = f"{device_id.lower()}_master_device"
         self._attr_icon = "mdi:power-matrix"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
+
+    async def async_added_to_hass(self) -> None:
+        self._coordinator.async_add_listener(self.async_write_ha_state)
 
     @property
     def is_on(self) -> bool:

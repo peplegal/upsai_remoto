@@ -18,6 +18,7 @@ async def async_setup_entry(
 
     async_add_entities([UpsaiMasterUnlockButton(coordinator, device_id)])
 
+
 class UpsaiMasterUnlockButton(CoordinatorEntity, ButtonEntity):
     """Momentary push button to send a prefixed UNLOCK instruction."""
     def __init__(self, coordinator, device_id):
@@ -31,8 +32,9 @@ class UpsaiMasterUnlockButton(CoordinatorEntity, ButtonEntity):
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
     async def async_added_to_hass(self) -> None:
-        """Register listener to handle UI loop synchronization."""
+        """Register listener to redraw the UI instantly on packet arrival."""
         self._coordinator.async_add_listener(self.async_write_ha_state)
 
     async def async_press(self) -> None:
+        """Executes a single string write request prefixed with HA_."""
         await self._coordinator.async_send_ws_command("HA_DEV:UNLOCK")

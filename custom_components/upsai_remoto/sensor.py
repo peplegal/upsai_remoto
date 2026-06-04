@@ -21,20 +21,11 @@ async def async_setup_entry(
         UpsaiTextSensor(coordinator, device_id, "Msg", "Status Message", "mdi:information-outline")
     ])
 
-class UpsaiSensorBase(CoordinatorEntity, SensorEntity):
-    """Base sensor to force real-time WebSocket redraw triggers."""
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._coordinator = coordinator
-
-    async def async_added_to_hass(self) -> None:
-        """Register listener to redraw the UI instantly on packet arrival."""
-        self._coordinator.async_add_listener(self.async_write_ha_state)
-
-class UpsaiVoltageSensor(UpsaiSensorBase):
+class UpsaiVoltageSensor(CoordinatorEntity, SensorEntity):
     """Representation of an electrical Voltage Sensor."""
     def __init__(self, coordinator, device_id, key, name, device_class, unit, icon):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._key = key
         self._attr_name = name
         self._attr_device_class = device_class
@@ -48,16 +39,21 @@ class UpsaiVoltageSensor(UpsaiSensorBase):
             model="FWI",
         )
 
+    async def async_added_to_hass(self) -> None:
+        """Register listener to redraw the UI instantly on packet arrival."""
+        self._coordinator.async_add_listener(self.async_write_ha_state)
+
     @property
     def native_value(self):
         if self._coordinator.data and "sensors" in self._coordinator.data:
             return self._coordinator.data["sensors"].get(self._key)
         return None
 
-class UpsaiGenericSensor(UpsaiSensorBase):
+class UpsaiGenericSensor(CoordinatorEntity, SensorEntity):
     """Representation of a numeric Percentage/Load Sensor."""
     def __init__(self, coordinator, device_id, key, name, unit, icon):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._key = key
         self._attr_name = name
         self._attr_native_unit_of_measurement = unit
@@ -65,21 +61,28 @@ class UpsaiGenericSensor(UpsaiSensorBase):
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
 
+    async def async_added_to_hass(self) -> None:
+        self._coordinator.async_add_listener(self.async_write_ha_state)
+
     @property
     def native_value(self):
         if self._coordinator.data and "sensors" in self._coordinator.data:
             return self._coordinator.data["sensors"].get(self._key)
         return None
 
-class UpsaiTextSensor(UpsaiSensorBase):
+class UpsaiTextSensor(CoordinatorEntity, SensorEntity):
     """Representation of a plain Text Status string."""
     def __init__(self, coordinator, device_id, key, name, icon):
         super().__init__(coordinator)
+        self._coordinator = coordinator
         self._key = key
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})
+
+    async def async_added_to_hass(self) -> None:
+        self._coordinator.async_add_listener(self.async_write_ha_state)
 
     @property
     def native_value(self):
