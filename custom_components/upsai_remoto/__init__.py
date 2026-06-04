@@ -1,49 +1,54 @@
-import asyncio
+from datetime import timedelta
 import logging
 import json
+import asyncio
 import aiohttp
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto over a persistent space-proof JSON WebSocket connection."""
+    """Set up UPSAI Remoto over a bulletproof data-injected Coordinator."""
     
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
     
     session = async_get_clientsession(hass)
 
-    class WebSocketCoordinator:
-        def __init__(self):
-            self.data = {"sensors": {}, "bank": {}}
-            self.device_ip = device_ip
-            self.device_id = device_id
-            self.listeners = []
-            self._ws = None
+    # 1. Initialize the official HA Coordinator with NO polling interval (None)
+    coordinator = DataUpdateCoordinator(
+        hass,
+        _LOGGER,
+        name=f"UPSAI WS Coordinator ({device_id})",
+        update_interval=None, # Disables HTTP polling entirely
+    )
 
-        def async_add_listener(self, callback):
-            self.listeners.append(callback)
+    # Inject your dynamic device identifiers onto the coordinator object canvas
+    coordinator.device_ip = device_ip
+    coordinator.device_id = device_id
+    coordinator._ws = None  # Live socket tracking pointer
 
-        async def async_send_ws_command(self, command_string: str):
-            """Pushes pure command strings directly back down the active pipe."""
-            if self._ws and not self._ws.closed:
-                try:
-                    _LOGGER.info("Sending WS Command: %s", command_string)
-                    await self._ws.send_str(command_string)
-                except Exception as err:
-                    _LOGGER.error("Failed to write to WebSocket stream pipe: %s", err)
-            else:
-                _LOGGER.warning("Command dropped: WebSocket connection is offline.")
+    async def async_send_ws_command(command_string: str):
+        """Pushes pure command strings directly back down the active pipe."""
+        if coordinator._ws and not coordinator._ws.closed:
+            try:
+                _LOGGER.info("Sending WS Command: %s", command_string)
+                await coordinator._ws.send_str(command_string)
+            except Exception as err:
+                _LOGGER.error("Failed to write to WebSocket stream pipe: %s", err)
+        else:
+            _LOGGER.warning("Command dropped: WebSocket connection is offline.")
 
-    coordinator = WebSocketCoordinator()
+    # Bind the sender function directly to the coordinator object asset
+    coordinator.async_send_ws_command = async_send_ws_command
 
     async def websocket_listener_task():
-        """Maintains connection to Mongoose and parses incoming telemetry payloads safely."""
+        """Maintains the background connection and safely feeds the native cache."""
         ws_url = f"ws://{device_ip}/websocket"
         
         while True:
@@ -58,14 +63,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
-                            # Parse raw incoming text stream block safely
                             parsed_json = json.loads(msg.data)
                             
-                            # 🚀 BULLETPROOF BULWARK: Strips out any accidental white-space markers 
-                            # from your keys and values dynamically (e.g. transforms "bank0_stat " into "bank0_stat")
+                            # Clean up and sanitize incoming keys dynamically
                             raw_payload = {str(k).strip(): v for k, v in parsed_json.items()}
                             
-                            coordinator.data = {
+                            # Build the exact data structure your entities expect
+                            new_data = {
                                 "sensors": {
                                     "Vin": float(raw_payload.get("Vin", 0.0)),
                                     "Vout": float(raw_payload.get("Vout", 0.0)),
@@ -78,9 +82,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 }
                             }
                             
-                            # Execute immediate interface updates across all registered entities
-                            for update_callback in coordinator.listeners:
-                                update_callback()
+                            # 🚀 THE CRITICAL LINE: Safely updates the core cache and pushes to UI 
+                            # inside Home Assistant's secure main event execution thread loop!
+                            hass.loop.call_soon_threadsafe(coordinator.async_set_updated_data, new_data)
                                 
             except Exception as err:
                 _LOGGER.warning("Mongoose stream closed or dropped: %s. Re-linking in 5s...", err)
@@ -88,6 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator._ws = None
             await asyncio.sleep(5)
 
+    # Launch background task safely inside the container daemon pool
     entry.async_create_background_task(hass, websocket_listener_task(), "upsai_ws_listener")
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
