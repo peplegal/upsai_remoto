@@ -11,7 +11,7 @@ DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection.""" 
+    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection."""
     
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
@@ -58,9 +58,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
-                            raw_payload = json.loads(msg.data)
+                            parsed_json = json.loads(msg.data)
                             
-                            # 🚀 THE TARGET FIX: Flatten the dictionary mapping block completely
+                            # 🚀 SPACE-PROOF KEY CLEANUP:
+                            # Automatically trims invisible spaces from your Mongoose keys
+                            raw_payload = {k.strip(): v for k, v in parsed_json.items()}
+                            
                             coordinator.data = {
                                 "sensors": {
                                     "Vin": raw_payload.get("Vin", 0.0),
@@ -69,8 +72,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                     "Msg": raw_payload.get("Msg", "WS Telemetry Active")
                                 },
                                 "bank": {
-                                    "bank0_stat": raw_payload.get("bank0_stat", "00000000"),
-                                    "bank0_lock": raw_payload.get("bank0_lock", "00000000")
+                                    "bank0_stat": str(raw_payload.get("bank0_stat", "00000000")).strip(),
+                                    "bank0_lock": str(raw_payload.get("bank0_lock", "00000000")).strip()
                                 }
                             }
                             
