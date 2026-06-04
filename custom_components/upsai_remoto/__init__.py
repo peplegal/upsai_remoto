@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import json
+import re
 import aiohttp
 
 from homeassistant.core import HomeAssistant
@@ -11,7 +11,7 @@ DOMAIN = "upsai_remoto"
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up UPSAI Remoto over a persistent bidirectional WebSocket connection."""
+    """Set up UPSAI Remoto over a persistent raw-string parsing WebSocket connection."""
     
     device_ip = entry.data.get("ip") or "192.168.0.3"
     device_id = entry.data.get("device_id") or "P6IO7078YR"
@@ -43,13 +43,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = WebSocketCoordinator()
 
     async def websocket_listener_task():
-        """Maintains connection to Mongoose and handles lifecycle notifications."""
+        """Maintains connection and extracts data using raw string matching."""
         ws_url = f"ws://{device_ip}/websocket"
         
         while True:
             try:
                 _LOGGER.info("Connecting to bidirectional Mongoose WebSocket: %s", ws_url)
-                async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
+                # Turned off explicit heartbeat tracking to bypass the rigid frame validation block
+                async with session.ws_connect(ws_url) as ws:
                     coordinator._ws = ws
                     _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
                     
@@ -57,23 +58,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     await coordinator.async_send_ws_command("HA_SYSTEM:CONNECT")
                     
                     async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            parsed_json = json.loads(msg.data)
+                        if msg.type in (aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY):
+                            # Convert incoming bytes/text to a clean python string
+                            raw_text = str(msg.data)
                             
-                            # 🚀 SPACE-PROOF KEY CLEANUP:
-                            # Automatically trims invisible spaces from your Mongoose keys
-                            raw_payload = {k.strip(): v for k, v in parsed_json.items()}
+                            # 🚀 BULLETPROOF TEXT PARSING LAYER:
+                            # Uses Regex to find your values directly, ignoring any missing keys or format glitches
+                            vin_match = re.search(r'"Vin"\s*:\s*([\d.]+)', raw_text)
+                            vout_match = re.search(r'"Vout"\s*:\s*([\d.]+)', raw_text)
+                            power_match = re.search(r'"Power"\s*:\s*(\d+)', raw_text)
+                            msg_match = re.search(r'"Msg"\s*:\s*"([^"]+)"', raw_text)
+                            stat_match = re.search(r'"bank0_stat"\s*:\s*"([01]+)"', raw_text)
+                            lock_match = re.search(r'"bank0_lock"\s*:\s*"([01]+)"', raw_text)
                             
                             coordinator.data = {
                                 "sensors": {
-                                    "Vin": raw_payload.get("Vin", 0.0),
-                                    "Vout": raw_payload.get("Vout", 0.0),
-                                    "Power": raw_payload.get("Power", 0),
-                                    "Msg": raw_payload.get("Msg", "WS Telemetry Active")
+                                    "Vin": float(vin_match.group(1)) if vin_match else 0.0,
+                                    "Vout": float(vout_match.group(1)) if vout_match else 0.0,
+                                    "Power": int(power_match.group(1)) if power_match else 0,
+                                    "Msg": msg_match.group(1) if msg_match else "WS Telemetry Active"
                                 },
                                 "bank": {
-                                    "bank0_stat": str(raw_payload.get("bank0_stat", "00000000")).strip(),
-                                    "bank0_lock": str(raw_payload.get("bank0_lock", "00000000")).strip()
+                                    "bank0_stat": stat_match.group(1) if stat_match else "00000000",
+                                    "bank0_lock": lock_match.group(1) if lock_match else "00000000"
                                 }
                             }
                             
@@ -81,10 +88,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             for update_callback in coordinator.listeners:
                                 update_callback()
                                 
-            except aiohttp.ClientError as err:
-                _LOGGER.warning("Mongoose stream dropped: %s. Re-linking in 5s...", err)
             except Exception as err:
-                _LOGGER.error("WebSocket background task exception error: %s", err)
+                _LOGGER.warning("Mongoose stream closed or dropped: %s. Re-linking in 5s...", err)
             
             coordinator._ws = None
             await asyncio.sleep(5)
@@ -99,11 +104,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload entry data paths cleanly and send a Goodbye notification."""
     coordinator = hass.data[DOMAIN].get(entry.entry_id)
-    
     if coordinator:
         try:
             await asyncio.wait_for(coordinator.async_send_ws_command("HA_SYSTEM:DISCONNECT"), timeout=1.0)
         except Exception:
             pass
-
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
