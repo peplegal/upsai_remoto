@@ -45,16 +45,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator.async_send_ws_command = async_send_ws_command
 
+    # 🚀 THE TARGET CRITICAL PRODUCTION REPAIR:
+    # Seed the coordinator cache buffer memory with initial blank states immediately.
+    # This prevents the Home Assistant core platform engine from timing out and killing the task.
+    coordinator.async_set_updated_data({
+        "sensors": {"Vin": 0.0, "Vout": 0.0, "Power": 0, "Msg": "Iniciando WebSocket..."},
+        "bank": {"bank0_stat": "00000000", "bank0_lock": "00000000"}
+    })
+
     async def websocket_listener_task():
-        """Maintains the background connection and safely feeds the native cache."""
+        """Maintains the background connection safely using native data framing filters."""
         ws_url = f"ws://{device_ip}/websocket"
         
         while True:
             try:
                 _LOGGER.info("Attempting connection to bidirectional Mongoose WebSocket: %s", ws_url)
                 
-                # CLEAN NATIVE TIMEOUT FIX: Uses built-in asyncio library safely
-                async with asyncio.timeout(5.0):
+                async with asyncio.timeout(10.0):
                     async with session.ws_connect(ws_url, heartbeat=10.0) as ws:
                         coordinator._ws = ws
                         _LOGGER.info("Bidirectional string pipeline established with Mongoose firmware!")
@@ -63,6 +70,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         await coordinator.async_send_ws_command("HA_SYSTEM:CONNECT")
                         
                         async for msg in ws:
+                            if msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED):
+                                _LOGGER.warning("WebSocket channel received a system close message type context.")
+                                break
+                                
                             if msg.type == aiohttp.WSMsgType.TEXT:
                                 parsed_json = json.loads(msg.data)
                                 raw_payload = {str(k).strip(): v for k, v in parsed_json.items()}
