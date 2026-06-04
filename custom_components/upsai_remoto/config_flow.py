@@ -41,22 +41,27 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self.context["title_placeholders"] = {"name": f"UPSAI ({self._device_id})"}
         
-        # Move forward safely passing a blank validation map trigger token
-        return await self.async_step_user(user_input={})
+        # 🚀 FIX: Pass the dynamically discovered data dictionary directly into the next step
+        return await self.async_step_user(user_input={
+            "device_id": self._device_id,
+            "ip": self._device_ip
+        })
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the final user step to confirm setup."""
-        if user_input is not None or self.context.get("source") == config_entries.SOURCE_SSDP:
+        if user_input is not None:
+            # 🚀 FIX: Pull the verified variables out of the user input dictionary context safely
+            device_id = user_input.get("device_id") or self._device_id
+            device_ip = user_input.get("ip") or self._device_ip
             
             # Concatenate both saved string variables cleanly to form the complete profile text
-            # This cleanly transforms "FWI" and "1200" into "FWI 1200"
             full_model_string = f"{self._model_name} {self._model_number}".strip()
 
             return self.async_create_entry(
-                title=f"UPSAI Remote ({self._device_id})", 
+                title=f"UPSAI Remote ({device_id})", 
                 data={
-                    "device_id": self._device_id,
-                    "ip": self._device_ip,
+                    "device_id": device_id,
+                    "ip": device_ip,         # This is now guaranteed to write the true dynamic IP!
                     "model": full_model_string
                 }
             )
