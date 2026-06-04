@@ -109,7 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = engine
     
     # This securely registers the dynamic DHCP tracking callback routine
-    entry.async_on_unload(entry.add_to_updates_listener(async_reload_entry))    
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))    
 
     # Forward the setup configuration straight to your entity platforms
     await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch", "button"])
