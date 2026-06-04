@@ -35,7 +35,7 @@ class UpsaiVoltageSensor(SensorEntity):
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            model="FWI",
+            model=getattr(engine, "device_model", "Modelo Indefinido"),
         )
 
     async def async_added_to_hass(self) -> None:

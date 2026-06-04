@@ -39,7 +39,7 @@ class UpsaiMasterUnlockButton(ButtonEntity):
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            model="FWI",
+            model=getattr(engine, "device_model", "Modelo Indefinido"),
         )
 
     async def async_added_to_hass(self) -> None:
@@ -59,7 +59,7 @@ class UpsaiOutletRebootButton(ButtonEntity):
         self._outlet_id = outlet_id
         
         # User-friendly description that maps seamlessly to the Device Card registry
-        self._attr_name = f"reiniciar {outlet_id}"
+        self._attr_name = f"_Reiniciar {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_reboot0_{outlet_id}"
         self._attr_icon = "mdi:restart"
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, device_id)})

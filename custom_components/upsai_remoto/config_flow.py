@@ -11,7 +11,7 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
         """Handle a flow initialized by SSDP discovery."""
         # 1. Pull the unique hardware serial number from the UPnP metadata
-        device_id = discovery_info.upnp.get("modelNumber")
+        device_id = discovery_info.upnp.get("serialNumber")
         
         # 2. Extract the clean, raw IP string directly out of the network headers
         # This safely pulls a pure string like "192.168.0.3" bypassing URL splitting bugs
@@ -41,13 +41,23 @@ class UpsaiRemotoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the final user step to confirm setup."""
-        if user_input is not None:
-            # Securely save the dynamic IP and Serial into the config entry storage registry
+        if user_input is not None or self.context.get("source") == config_entries.SOURCE_SSDP:
+            # 1. Safely extract both separate XML tags from the UPnP network data
+            upnp_info = self.context.get("discovery_info", {}).upnp if self.context.get("discovery_info") else {}
+            
+            model_name = upnp_info.get("modelName") or "Modelo"
+            model_number = upnp_info.get("modelNumber") or "Indefinido"
+            
+            # 🚀 THE FIX: Concatenate both strings cleanly to form the complete profile text
+            # This seamlessly transforms "FWI" and "1200" into "FWI 1200"
+            full_model_string = f"{model_name} {model_number}".strip()
+
             return self.async_create_entry(
-                title=f"UPSAI Remote ({user_input.get('device_id')})", 
+                title=f"UPSAI Remote ({self._device_id})", 
                 data={
-                    "device_id": user_input.get("device_id"),
-                    "ip": user_input.get("ip")
+                    "device_id": self._device_id,
+                    "ip": self._device_ip,
+                    "model": full_model_string
                 }
             )
             

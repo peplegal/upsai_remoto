@@ -13,8 +13,9 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up a pure, event-driven WebSocket pipeline where the hardware dictates the rhythm."""
     
-    device_ip = entry.data.get("ip") or "192.168.0.3"
-    device_id = entry.data.get("device_id") or "P6IO7078YR"
+    device_ip = entry.data.get("ip") or "192.168.0.1"
+    device_id = entry.data.get("device_id") or "0000000000"
+    device_model = entry.data.get("model") or "Modelo Indefinido"
     
     session = async_get_clientsession(hass)
 
@@ -27,6 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }
             self.device_ip = device_ip
             self.device_id = device_id
+            self.device_model = device_model
             self.listeners = []
             self._ws = None
 
