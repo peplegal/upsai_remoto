@@ -31,19 +31,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
         
-    # 🎛️ AUTOMATED PLUG & PLAY CARD VIEW EXPOSURE
+    # 🎛️ AUTOMATED PLUG & PLAY CARD VIEW EXPOSURE (Async Safe)
     try:
+        from homeassistant.components.http import StaticPathConfig
+        
         current_dir = os.path.dirname(__file__)
         js_file_path = os.path.join(current_dir, "upsai-card.js")
         
-        # Register the local js asset path as an accessible HTTP web asset path
-        hass.http.register_static_path(
-            "/upsai_remoto/upsai-card.js",
-            js_file_path,
-            cache_headers=False
-        )
+        # Register the local asset config using the modern async array handler
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(
+                url_path="/upsai_remoto/upsai-card.js",
+                path=js_file_path,
+                cache_headers=False
+            )
+        ])
         
-        # Inject the resource directly into Lovelace's dynamic registry database
+        # Inject the resource asset directly into Lovelace's dynamic UI tracking database
         frontend = hass.data.get("frontend")
         if frontend and hasattr(frontend, "async_register_frontend_resource"):
             await frontend.async_register_frontend_resource(
