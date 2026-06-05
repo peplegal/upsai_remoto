@@ -7,29 +7,45 @@ class UpsaiRemotoCard extends HTMLElement {
           <style>
             .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; text-align: center; }
             .telemetry-val { font-size: 24px; font-weight: bold; color: var(--primary-color); }
+            
+            /* 🚀 POLISHED STATUS MESSAGE BLOCK OVERLAY */
+            .status-container { text-align: center; padding: 0 15px 15px 15px; border-bottom: 1px solid var(--divider-color); }
+            .status-title { font-weight: bold; margin-bottom: 4px; font-size: 14px; }
+            .status-val { font-size: 18px; color: var(--secondary-text-color); font-weight: 500; }
+
             .master-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; border-bottom: 1px solid var(--divider-color); align-items: center; }
             .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); }
-            .master-label { font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+            .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; }
+            
+            /* 🚀 CENTERED FULL-WIDTH MASTER BUTTON DESIGN */
+            #masterlock_btn { width: 100%; --mdc-theme-primary: var(--primary-color); text-align: center; display: flex; justify-content: center; }
+            
             .tabular-control { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 5px; padding: 8px 15px; align-items: center; }
             .header-row { font-weight: bold; border-bottom: 1px solid var(--divider-color); padding-bottom: 5px; }
             ha-switch { display: inline-flex; justify-content: center; }
             ha-icon-button { --mdc-icon-button-size: 36px; display: inline-flex; justify-content: center; }
-            mwc-button { --mdc-theme-primary: var(--primary-color); width: 100%; }
+            
+            /* 🚀 REBOOT BUTTON ICON STYLING */
+            .reboot-btn { --mdc-theme-primary: var(--primary-color); width: 100%; display: flex; justify-content: center; }
           </style>
+          
           <div class="grid-container">
             <div><div><b>Rede Elétrica</b></div><div class="telemetry-val" id="vin">- V</div></div>
             <div><div><b>Tensão Saída</b></div><div class="telemetry-val" id="vout">- V</div></div>
             <div><div><b>Consumo</b></div><div class="telemetry-val" id="power">- %</div></div>
           </div>
-          <div style="padding: 0 15px 15px 15px; border-bottom: 1px solid var(--divider-color);">
-            <b>Estado do Sistema:</b> <span id="msg">Iniciando...</span>
+          
+          <!-- 🚀 RESTRUCTURED STATUS MESSAGE ROW (TITLE ABOVE) -->
+          <div class="status-container">
+            <div class="status-title">ESTADO DO SISTEMA</div>
+            <div class="status-val" id="msg">Iniciando...</div>
           </div>
           
-          <!-- 🚀 NEW MASTER CONTROLS ROW -->
           <div class="master-container">
             <div class="master-box">
               <div class="master-label">COMANDO GLOBAL</div>
-              <mwc-button raised dense id="masterlock_btn" icon="mdi:lock-open-check">DESTRAVAR</mwc-button>
+              <!-- 🚀 FIXED: PROPER ICON INTEGRATION AND INNER CENTERING SPAN -->
+              <mwc-button raised dense id="masterlock_btn" icon="mdi:lock-open-check"><span>DESTRAVAR</span></mwc-button>
             </div>
             <div class="master-box">
               <div class="master-label">DISPOSITIVO</div>
@@ -51,7 +67,8 @@ class UpsaiRemotoCard extends HTMLElement {
                   </ha-icon-button>
                 </div>
                 <div style="text-align:center;">
-                  <mwc-button raised dense id="reboot_${i}" data-index="${i}">Reset</mwc-button>
+                  <!-- 🚀 FIXED: ADDED RESTART ICON AND EXACT LABEL ALIGNMENT -->
+                  <mwc-button raised dense class="reboot-btn" id="reboot_${i}" data-index="${i}" icon="mdi:restart">Reset</mwc-button>
                 </div>
               </div>
             `).join('')}
@@ -77,10 +94,8 @@ class UpsaiRemotoCard extends HTMLElement {
 
   _setupListeners() {
     this.addEventListener('click', (ev) => {
-      // 1. STOPS OLD CACHED COPIES OF THE CARD FROM INTERCEPTING THIS CLICK
       ev.stopImmediatePropagation();
       
-      // 2. HARDWARE DEBOUNCE GUARD: Ignore clicks that happen within 250 milliseconds of each other
       const now = Date.now();
       if (this._lastClick && (now - this._lastClick < 250)) {
         return;
@@ -98,7 +113,6 @@ class UpsaiRemotoCard extends HTMLElement {
       
       const devId = this.config.device_id.toLowerCase();
       
-      // MASTER CLICK INTERCEPTORS
       if (target.id === 'masterlock_btn') {
         this._hass.callService('button', 'press', { entity_id: `button.${devId}_master_unlock` });
         return;
@@ -108,7 +122,6 @@ class UpsaiRemotoCard extends HTMLElement {
         return;
       }
       
-      // REGULAR TABULAR CHANNEL INTERCEPTORS
       const [type, index] = target.id.split('_');
       if (type === 'out') {
         this._hass.callService('switch', 'toggle', { entity_id: `switch.${devId}_out0_${index}` });
@@ -133,8 +146,14 @@ class UpsaiRemotoCard extends HTMLElement {
     this.querySelector('#power').innerText = `${powerState} %`;
     this.querySelector('#msg').innerText = msgState;
 
-    // 🚀 MASTER STATE UPDATER LOCKS
-    const masterDeviceState = hass.states[`switch.${devId}_master_device`]?.state === 'on';
+    let masterDeviceState = hass.states[`switch.${devId}_master_device`]?.state === 'on';
+    if (hass.states[`switch.${devId}_master_device`] === undefined) {
+      const masterKey = Object.keys(hass.states).find(key => 
+        key.startsWith('switch.') && key.includes(devId) && key.endsWith('master_device')
+      );
+      if (masterKey) masterDeviceState = hass.states[masterKey].state === 'on';
+    }
+
     const masterSwEl = this.querySelector('#masterdevice_sw');
     if (masterSwEl) masterSwEl.checked = masterDeviceState;
 
