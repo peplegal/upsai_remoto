@@ -31,12 +31,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
         
-    # 🎛️ BULLETPROOF YAML DASHBOARD PROVISIONING ENGINE
+    # 🎛️ DOCKER-SAFE DIRECT Lovelace DASHBOARD REGISTRATION
     try:
-        # Define paths to read template asset and write output into HA config directory
         current_dir = os.path.dirname(__file__)
         template_path = os.path.join(current_dir, "dashboard_template.yaml")
-        output_dash_path = os.path.join(hass.config.config_dir, f"ui-lovelace-{device_id}.yaml")
+        
+        # 1. Save the file with a clean, static name inside the /config directory
+        # Using a static name makes it incredibly easy to link to the dashboard
+        output_filename = f"ui-lovelace-{device_id}.yaml"
+        output_dash_path = os.path.join(hass.config.config_dir, output_filename)
 
         def generate_yaml_dashboard():
             if os.path.exists(template_path):
@@ -46,7 +49,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Replace our dynamic unique tracker template variables
                 processed_content = raw_content.replace("TEMPLATE_UNIQUE_ID", str(device_id))
                 
-                # Safely drop the finalized parsed YAML configuration payload file on disk
                 with open(output_dash_path, "w", encoding="utf-8") as out_f:
                     out_f.write(processed_content)
                 return True
@@ -54,8 +56,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Run file operations asynchronously using the core background pool
         await hass.async_add_executor_job(generate_yaml_dashboard)
-        _LOGGER.info("UPSAI Remoto: UI structure written to config/ui-lovelace-%s.yaml successfully.", device_id)
-        
+        _LOGGER.info("UPSAI Remoto: UI structure written to config/%s successfully.", output_filename)
+
+        # 2. DOCKER INTEGRATION HOOK: Inject directly into the core lovelace system data
+        # This acts exactly like adding it to configuration.yaml, but happens dynamically in Python!
+        lovelace_data = hass.data.get("lovelace")
+        if lovelace_data and hasattr(lovelace_data, "dashboards"):
+            dashboard_key = f"upsai_remoto_{entry.entry_id}"
+            
+            lovelace_data.dashboards[dashboard_key] = {
+                "mode": "yaml",
+                "filename": output_filename,
+                "title": "UPSAI Remoto",
+                "icon": "mdi:power-matrix",
+                "show_in_sidebar": True,
+                "require_admin": False,
+            }
+            
+            # Force Home Assistant to rebuild the sidebar navigation links immediately
+            if hasattr(lovelace_data, "async_panels_updated"):
+                lovelace_data.async_panels_updated()
+                
+            _LOGGER.info("UPSAI Remoto: Dashboard successfully loaded into core Lovelace memory arrays.")
+            
     except Exception as err:
         _LOGGER.error("UPSAI Remoto: Failed to provision dashboard asset template file on disk: %s", err)
 
