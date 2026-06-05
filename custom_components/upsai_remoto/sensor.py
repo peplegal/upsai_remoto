@@ -31,11 +31,14 @@ class UpsaiVoltageSensor(SensorEntity):
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
+        
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID (e.g. sensor.test3333zz_vin)
+        self.entity_id = f"sensor.{device_id.lower()}_{key.lower()}"
+        
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
             manufacturer="UPSAI Sistemas de Energia",
-            # 🚀 DYNAMIC EXTRACTION: Links the model variant "FWI 1200" directly to the card
             model=getattr(engine, "device_model", "Modelo Indefinido"),
         )
 
@@ -65,6 +68,10 @@ class UpsaiGenericSensor(SensorEntity):
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
+        
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID (e.g. sensor.test3333zz_power)
+        self.entity_id = f"sensor.{device_id.lower()}_{key.lower()}"
+        
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             model=getattr(engine, "device_model", "Modelo Indefinido"),
@@ -94,6 +101,10 @@ class UpsaiTextSensor(SensorEntity):
         self._attr_name = name
         self._attr_icon = icon
         self._attr_unique_id = f"{device_id.lower()}_{key.lower()}"
+        
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID (e.g. sensor.test3333zz_msg)
+        self.entity_id = f"sensor.{device_id.lower()}_{key.lower()}"
+        
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             model=getattr(engine, "device_model", "Modelo Indefinido"),

@@ -34,6 +34,10 @@ class UpsaiOutputSwitch(SwitchEntity):
         self._attr_name = f"Saída {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_out0_{outlet_id}"
         self._attr_icon = "mdi:power-socket-us"
+
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID:
+        self.entity_id = f"switch.{device_id.lower()}_out0_{outlet_id}"
+        
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             name=f"UPSAI Remote {device_id}",
@@ -76,6 +80,10 @@ class UpsaiLockSwitch(SwitchEntity):
         
         self._attr_name = f"Trava {outlet_id}"
         self._attr_unique_id = f"{device_id.lower()}_lock0_{outlet_id}"
+        
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID:
+        self.entity_id = f"switch.{device_id.lower()}_lock0_{outlet_id}"
+        
         self._attr_icon = "mdi:lock"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
@@ -114,6 +122,10 @@ class UpsaiMasterDeviceSwitch(SwitchEntity):
         
         self._attr_name = "Dispositivo"
         self._attr_unique_id = f"{device_id.lower()}_master_device"
+        
+        # 🚀 FORCE CANONICAL PLUG & PLAY ENTITY ID:
+        self.entity_id = f"switch.{device_id.lower()}_master_device"
+        
         self._attr_icon = "mdi:power-matrix"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
