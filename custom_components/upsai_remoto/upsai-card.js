@@ -7,11 +7,14 @@ class UpsaiRemotoCard extends HTMLElement {
           <style>
             .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; text-align: center; }
             .telemetry-val { font-size: 24px; font-weight: bold; color: var(--primary-color); }
+            .master-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; border-bottom: 1px solid var(--divider-color); align-items: center; }
+            .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); }
+            .master-label { font-weight: bold; margin-bottom: 5px; font-size: 14px; }
             .tabular-control { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 5px; padding: 8px 15px; align-items: center; }
             .header-row { font-weight: bold; border-bottom: 1px solid var(--divider-color); padding-bottom: 5px; }
             ha-switch { display: inline-flex; justify-content: center; }
             ha-icon-button { --mdc-icon-button-size: 36px; display: inline-flex; justify-content: center; }
-            mwc-button { --mdc-theme-primary: var(--primary-color); }
+            mwc-button { --mdc-theme-primary: var(--primary-color); width: 100%; }
           </style>
           <div class="grid-container">
             <div><div><b>Rede Elétrica</b></div><div class="telemetry-val" id="vin">- V</div></div>
@@ -21,6 +24,19 @@ class UpsaiRemotoCard extends HTMLElement {
           <div style="padding: 0 15px 15px 15px; border-bottom: 1px solid var(--divider-color);">
             <b>Estado do Sistema:</b> <span id="msg">Iniciando...</span>
           </div>
+          
+          <!-- 🚀 NEW MASTER CONTROLS ROW -->
+          <div class="master-container">
+            <div class="master-box">
+              <div class="master-label">COMANDO GLOBAL</div>
+              <mwc-button raised dense id="masterlock_btn" icon="mdi:lock-open-check">DESTRAVAR</mwc-button>
+            </div>
+            <div class="master-box">
+              <div class="master-label">DISPOSITIVO</div>
+              <ha-switch id="masterdevice_sw"></ha-switch>
+            </div>
+          </div>
+
           <div style="padding: 10px 0;">
             <div class="tabular-control header-row">
               <div>CANAL</div><div style="text-align:center;">ATIVAR</div><div style="text-align:center;">TRAVAR</div><div style="text-align:center;">REINICIAR</div>
@@ -61,12 +77,29 @@ class UpsaiRemotoCard extends HTMLElement {
 
   _setupListeners() {
     this.addEventListener('click', (ev) => {
-      const target = ev.composedPath().find(el => el.id && (el.id.startsWith('out_') || el.id.startsWith('lockbtn_') || el.id.startsWith('reboot_')));
+      const target = ev.composedPath().find(el => el.id && (
+        el.id.startsWith('out_') || 
+        el.id.startsWith('lockbtn_') || 
+        el.id.startsWith('reboot_') ||
+        el.id === 'masterlock_btn' ||
+        el.id === 'masterdevice_sw'
+      ));
       if (!target) return;
       
-      const [type, index] = target.id.split('_');
-      const devId = this.config.device_id.toLowerCase(); // Lowercase string alignment
+      const devId = this.config.device_id.toLowerCase();
       
+      // 🚀 MASTER CLICK INTERCEPTORS
+      if (target.id === 'masterlock_btn') {
+        this._hass.callService('button', 'press', { entity_id: `button.${devId}_master_unlock` });
+        return;
+      }
+      if (target.id === 'masterdevice_sw') {
+        this._hass.callService('switch', 'toggle', { entity_id: `switch.${devId}_master_device` });
+        return;
+      }
+      
+      // REGULAR TABULAR CHANNEL INTERCEPTORS
+      const [type, index] = target.id.split('_');
       if (type === 'out') {
         this._hass.callService('switch', 'toggle', { entity_id: `switch.${devId}_out0_${index}` });
       } else if (type === 'lockbtn') {
@@ -78,7 +111,7 @@ class UpsaiRemotoCard extends HTMLElement {
   }
 
   _updateStates(hass) {
-    const devId = this.config.device_id.toLowerCase(); // Forces lowercase match to match backend configuration
+    const devId = this.config.device_id.toLowerCase();
     
     const vinState = this._findSensorState(hass, 'vin') || '-';
     const voutState = this._findSensorState(hass, 'vout') || '-';
@@ -90,8 +123,12 @@ class UpsaiRemotoCard extends HTMLElement {
     this.querySelector('#power').innerText = `${powerState} %`;
     this.querySelector('#msg').innerText = msgState;
 
+    // 🚀 MASTER STATE UPDATER LOCKS
+    const masterDeviceState = hass.states[`switch.${devId}_master_device`]?.state === 'on';
+    const masterSwEl = this.querySelector('#masterdevice_sw');
+    if (masterSwEl) masterSwEl.checked = masterDeviceState;
+
     for (let i = 0; i < 8; i++) {
-      // Corrected strings layout targeting the exact generated state maps
       const swState = hass.states[`switch.${devId}_out0_${i}`]?.state === 'on';
       const lockState = hass.states[`switch.${devId}_lock0_${i}`]?.state === 'on';
       
@@ -111,6 +148,6 @@ class UpsaiRemotoCard extends HTMLElement {
     this.config = config;
   }
 
-  getCardSize() { return 8; }
+  getCardSize() { return 10; }
 }
 customElements.define('upsai-remoto-card', UpsaiRemotoCard);
