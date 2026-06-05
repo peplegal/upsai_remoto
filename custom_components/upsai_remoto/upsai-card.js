@@ -13,18 +13,18 @@ class UpsaiRemotoCard extends HTMLElement {
             .status-val { font-size: 18px; color: var(--secondary-text-color); font-weight: 500; }
 
             .master-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; border-bottom: 1px solid var(--divider-color); align-items: center; }
-            .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); }
-            .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; }
+            .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); min-height: 80px; }
+            .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; text-align: center; }
             
-            /* 🚀 FIXED: ACCENT BACKGROUND AND FORCED COLOR SPECIFICATIONS FOR DESTRAVAR */
-            #masterlock_btn { 
-              width: 100%; 
-              --mdc-theme-primary: #e6b800; 
-              text-align: center; 
-              display: flex; 
-              justify-content: center; 
-              font-weight: bold;
-              color: #ffffff !important;
+            /* 🚀 FIXED: MASTER UNLOCK TRANSFORMED INTO A PERFECT HIGH-VISIBILITY YELLOW ICON BUTTON */
+            .master-icon-btn { 
+              color: #e6b800 !important;
+              --mdc-icon-button-size: 44px;
+              display: inline-flex;
+              justify-content: center;
+            }
+            .master-icon-btn ha-icon {
+              --mdc-icon-size: 32px;
             }
             
             .tabular-control { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 5px; padding: 8px 15px; align-items: center; }
@@ -32,7 +32,6 @@ class UpsaiRemotoCard extends HTMLElement {
             ha-switch { display: inline-flex; justify-content: center; }
             ha-icon-button { --mdc-icon-button-size: 36px; display: inline-flex; justify-content: center; }
             
-            /* 🚀 FIXED: STYLING HOOKS FOR PURE CIRCULAR REBOOT ICONS */
             .reboot-icon-btn { 
               color: var(--primary-color);
               display: inline-flex;
@@ -55,7 +54,10 @@ class UpsaiRemotoCard extends HTMLElement {
           <div class="master-container">
             <div class="master-box">
               <div class="master-label">COMANDO GLOBAL</div>
-              <mwc-button raised dense id="masterlock_btn" icon="mdi:lock-open-check">DESTRAVAR</mwc-button>
+              <!-- 🚀 FIXED: REPLACED TEXT BUTTON WITH A STUNNING PURE ICON ACTION TOGGLE -->
+              <ha-icon-button class="master-icon-btn" id="masterlock_btn">
+                <ha-icon icon="mdi:lock-open-check"></ha-icon>
+              </ha-icon-button>
             </div>
             <div class="master-box">
               <div class="master-label">DISPOSITIVO</div>
@@ -77,7 +79,6 @@ class UpsaiRemotoCard extends HTMLElement {
                   </ha-icon-button>
                 </div>
                 <div style="text-align:center;">
-                  <!-- 🚀 FIXED: REPLACED MWC-BUTTON WITH HA-ICON-BUTTON FOR PERFECT VISIBILITY -->
                   <ha-icon-button class="reboot-icon-btn" id="reboot_${i}" data-index="${i}">
                     <ha-icon icon="mdi:restart"></ha-icon>
                   </ha-icon-button>
