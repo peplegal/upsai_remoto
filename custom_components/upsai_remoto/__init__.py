@@ -32,19 +32,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     
     
-    # 🎛️ DASHBOARD INJECTION BLOCK (Non-blocking / Safe)
+    # 🎛️ NEW LOVELACE STRATEGY DASHBOARD INJECTION
     try:
         current_dir = os.path.dirname(__file__)
         json_path = os.path.join(current_dir, "dashboards.json")
         
-        # Define a small helper function to execute file reading on a worker thread
+        # Safe Offloaded I/O execution via the core executor pool
         def load_dashboard_file():
             if os.path.exists(json_path):
                 with open(json_path, "r", encoding="utf-8") as f:
                     return f.read()
             return None
 
-        # Safe Offloaded I/O execution via the core executor pool
         raw_layout = await hass.async_add_executor_job(load_dashboard_file)
 
         if raw_layout:
@@ -52,25 +51,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
             dashboard_config = json.loads(processed_layout)
 
-            # Inject the custom dashboard view array into the Lovelace engine
-            async_register_built_in_panel(
-                hass,
-                component_name="lovelace",
-                sidebar_title="UPSAI Remoto",
-                sidebar_icon="mdi:power-matrix",
-                frontend_url_path=f"upsai_remoto_{entry.entry_id}",
-                config={
-                    "mode": "yaml",
+            # Store the processed configuration mapping inside memory so our strategy backend can find it
+            hass.data.setdefault(DOMAIN, {})[f"dash_config_{entry.entry_id}"] = dashboard_config
+
+            # Register a full native Lovelace dashboard backed by code
+            hass.components.frontend.async_register_dashboard(
+                f"upsai_remoto_{entry.entry_id}",  # Unique URL token path
+                "yaml",                            # Read-only configuration mode lock
+                {
                     "title": "UPSAI Remoto",
-                    "views": dashboard_config["views"]
-                },
-                require_admin=False
+                    "icon": "mdi:power-matrix",
+                    "show_in_sidebar": True,
+                    "require_admin": False,
+                    "strategy": {                  # Intercepts rendering engine with a custom strategy callback
+                        "type": "custom",
+                        "name": f"upsai_remoto_strategy_{entry.entry_id}"
+                    }
+                }
             )
-            _LOGGER.info("UPSAI Remoto dashboard structural layout injected successfully.")
+
+            # Define the callback service hook that pipes your dashboards.json straight to Lovelace
+            async def async_get_dashboard_config(hass_instance, config_id, *args, **kwargs):
+                return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
+
+            # Register the strategy type engine name into the websocket/frontend loop
+            hass.components.frontend.async_register_dashboard_strategy(
+                f"upsai_remoto_strategy_{entry.entry_id}",
+                async_get_dashboard_config
+            )
+            
+            _LOGGER.info("UPSAI Remoto Custom Lovelace Strategy panel compiled successfully.")
         else:
             _LOGGER.error("Dashboard layout missing! Could not locate dashboards.json file.")
     except Exception as err:
-        _LOGGER.error("Failed to programmatically inject custom dashboard layout: %s", err)
+        _LOGGER.error("Failed to programmatically compile custom Lovelace strategy dashboard: %s", err)
 
     # -------------------
                    
@@ -185,14 +199,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             pass
 
-    # 🎛️ CLEANUP SIDEBAR PANEL
+    # 🎛️ CLEANUP SIDEBAR LOVELACE STRATEGY
     try:
-        # Match the exact unique URL string used during registration
         panel_url = f"upsai_remoto_{entry.entry_id}"
-        async_remove_panel(hass, panel_url)
-        _LOGGER.info("Successfully removed sidebar Lovelace panel for entry: %s", entry.entry_id)
+        hass.components.frontend.async_remove_dashboard(panel_url)
+        
+        # Safely remove configuration references from memory
+        hass.data[DOMAIN].pop(f"dash_config_{entry.entry_id}", None)
+        _LOGGER.info("Successfully removed Lovelace dashboard strategy context for entry: %s", entry.entry_id)
     except Exception as err:
-        _LOGGER.error("Failed to cleanly remove Lovelace dashboard panel: %s", err)
+        _LOGGER.error("Failed to cleanly remove Lovelace dashboard strategy instance: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
