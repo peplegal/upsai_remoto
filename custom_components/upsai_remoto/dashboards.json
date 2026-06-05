@@ -1,0 +1,111 @@
+{
+  "views": [
+    {
+      "title": "UPSAI Remoto",
+      "path": "upsai_remoto_dashboard",
+      "icon": "mdi:power-matrix",
+      "type": "sections",
+      "sections": [	  
+        {
+          "title": "Telemetria",
+          "cards": [
+            {
+              "type": "grid",
+              "columns": 3,
+              "square": false,
+              "cards": [
+                { "type": "markdown", "content": "<center>**Rede Elétrica**</center>" },
+                { "type": "markdown", "content": "<center>**Tensão Saída**</center>" },
+                { "type": "markdown", "content": "<center>**Consumo**</center>" },
+                
+                { 
+                  "type": "markdown", 
+                  "content": "<center><span style='font-size: 28px; font-weight: bold; color: var(--primary-color);'>[[sensor.TEMPLATE_UNIQUE_ID_vin.state]] V</span></center>" 
+                },
+                { 
+                  "type": "markdown", 
+                  "content": "<center><span style='font-size: 28px; font-weight: bold; color: var(--primary-color);'>[[sensor.TEMPLATE_UNIQUE_ID_vout.state]] V</span></center>" 
+                },
+                { 
+                  "type": "markdown", 
+                  "content": "<center><span style='font-size: 28px; font-weight: bold; color: var(--primary-color);'>[[sensor.TEMPLATE_UNIQUE_ID_power.state]] %</span></center>" 
+                }
+              ]
+            },
+            {
+              "type": "entity",
+              "entity": "sensor.TEMPLATE_UNIQUE_ID_msg",
+              "name": "Estado do Sistema",
+              "icon": "mdi:information-outline"
+            },
+            {
+              "type": "grid",
+              "columns": 2,
+              "square": false,
+              "cards": [
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_master_unlock", "name": "DESTRAVAR", "icon": "mdi:lock-open-check", "icon_height": "30px" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_master_device", "name": "Dispositivo" }
+              ]
+            }
+          ]
+        },	  				
+        {
+          "title": "Painel de Controle Tabular",
+          "cards": [
+            {
+              "type": "grid",
+              "columns": 4,
+              "square": false,
+              "cards": [
+                { "type": "markdown", "content": "**CANAL**" },
+                { "type": "markdown", "content": "<center>**ATIVAR**</center>" },
+                { "type": "markdown", "content": "<center>**TRAVAR**</center>" },
+                { "type": "markdown", "content": "<center>**REINICIAR**</center>" },
+
+                { "type": "markdown", "content": "**SAÍDA 0**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_0", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_0", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_0", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 1**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_1", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_1", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_1", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 2**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_2", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_2", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_2", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 3**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_3", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_3", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_3", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 4**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_4", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_4", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_4", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 5**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_5", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_5", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_5", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 6**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_6", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_6", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_6", "show_name": false, "icon_height": "20px" },
+
+                { "type": "markdown", "content": "**SAÍDA 7**" },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_out0_7", "show_name": false },
+                { "type": "tile", "entity": "switch.TEMPLATE_UNIQUE_ID_lock0_7", "show_name": false },
+                { "type": "button", "entity": "button.TEMPLATE_UNIQUE_ID_reboot0_7", "show_name": false, "icon_height": "20px" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
