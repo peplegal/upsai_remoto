@@ -51,7 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 component_name="lovelace",
                 sidebar_title="UPSAI Remoto",
                 sidebar_icon="mdi:power-matrix",
-                url_path=f"upsai_remoto_{entry.entry_id}",  # Creates unique sidebar links if users have multiple UPS units
+                frontend_url_path=f"upsai_remoto_{entry.entry_id}",  # Creates unique sidebar links if users have multiple UPS units
                 config={
                     "mode": "yaml",
                     "title": "UPSAI Remoto",
