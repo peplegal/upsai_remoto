@@ -48,15 +48,11 @@ class UpsaiRemotoCard extends HTMLElement {
     this._updateStates(hass);
   }
 
-  // 🚀 BULLETPROOF STATE LOCATOR: Finds the exact sensor regardless of HA suffix changes
   _findSensorState(hass, suffix) {
     const devId = this.config.device_id.toLowerCase();
-    
-    // Primary guess based on our exact naming target configuration
     const exactMatch = hass.states[`sensor.${devId}_${suffix}`];
     if (exactMatch) return exactMatch.state;
 
-    // Fallback lookup: scans the active memory states if HA appended a suffix or stripped a separator
     const stateKey = Object.keys(hass.states).find(key => 
       key.startsWith('sensor.') && key.includes(devId) && key.endsWith(suffix)
     );
@@ -69,7 +65,7 @@ class UpsaiRemotoCard extends HTMLElement {
       if (!target) return;
       
       const [type, index] = target.id.split('_');
-      const devId = this.config.device_id;
+      const devId = this.config.device_id.toLowerCase(); // Lowercase string alignment
       
       if (type === 'out') {
         this._hass.callService('switch', 'toggle', { entity_id: `switch.${devId}_out0_${index}` });
@@ -82,9 +78,8 @@ class UpsaiRemotoCard extends HTMLElement {
   }
 
   _updateStates(hass) {
-    const devId = this.config.device_id;
+    const devId = this.config.device_id.toLowerCase(); // Forces lowercase match to match backend configuration
     
-    // Core dynamic telemetry resolutions using the dynamic suffix finder logic
     const vinState = this._findSensorState(hass, 'vin') || '-';
     const voutState = this._findSensorState(hass, 'vout') || '-';
     const powerState = this._findSensorState(hass, 'power') || '-';
@@ -96,6 +91,7 @@ class UpsaiRemotoCard extends HTMLElement {
     this.querySelector('#msg').innerText = msgState;
 
     for (let i = 0; i < 8; i++) {
+      // Corrected strings layout targeting the exact generated state maps
       const swState = hass.states[`switch.${devId}_out0_${i}`]?.state === 'on';
       const lockState = hass.states[`switch.${devId}_lock0_${i}`]?.state === 'on';
       
