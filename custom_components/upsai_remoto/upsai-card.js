@@ -25,7 +25,7 @@ class UpsaiRemotoCard extends HTMLElement {
             <div class="tabular-control header-row">
               <div>CANAL</div><div style="text-align:center;">ATIVAR</div><div style="text-align:center;">TRAVAR</div><div style="text-align:center;">REINICIAR</div>
             </div>
-            ${[0,1,2,3,4,5,6,7].map(i => `
+            ${Array.from({length: 8}, (_, i) => `
               <div class="tabular-control">
                 <div><b>SAÍDA ${i}</b></div>
                 <div style="text-align:center;"><ha-switch id="out_${i}" data-index="${i}"></ha-switch></div>
@@ -48,9 +48,23 @@ class UpsaiRemotoCard extends HTMLElement {
     this._updateStates(hass);
   }
 
+  // 🚀 BULLETPROOF STATE LOCATOR: Finds the exact sensor regardless of HA suffix changes
+  _findSensorState(hass, suffix) {
+    const devId = this.config.device_id.toLowerCase();
+    
+    // Primary guess based on our exact naming target configuration
+    const exactMatch = hass.states[`sensor.${devId}_${suffix}`];
+    if (exactMatch) return exactMatch.state;
+
+    // Fallback lookup: scans the active memory states if HA appended a suffix or stripped a separator
+    const stateKey = Object.keys(hass.states).find(key => 
+      key.startsWith('sensor.') && key.includes(devId) && key.endsWith(suffix)
+    );
+    return stateKey ? hass.states[stateKey].state : undefined;
+  }
+
   _setupListeners() {
     this.addEventListener('click', (ev) => {
-      // Traverse paths to find the actionable interactable element targeting index metrics
       const target = ev.composedPath().find(el => el.id && (el.id.startsWith('out_') || el.id.startsWith('lockbtn_') || el.id.startsWith('reboot_')));
       if (!target) return;
       
@@ -70,18 +84,17 @@ class UpsaiRemotoCard extends HTMLElement {
   _updateStates(hass) {
     const devId = this.config.device_id;
     
-    // Core telemetry value extractions mapping to Home Assistant state objects
-    const vinState = hass.states[`sensor.${devId}_vin`]?.state || '-';
-    const voutState = hass.states[`sensor.${devId}_vout`]?.state || '-';
-    const powerState = hass.states[`sensor.${devId}_power`]?.state || '-';
-    const msgState = hass.states[`sensor.${devId}_msg`]?.state || '-';
+    // Core dynamic telemetry resolutions using the dynamic suffix finder logic
+    const vinState = this._findSensorState(hass, 'vin') || '-';
+    const voutState = this._findSensorState(hass, 'vout') || '-';
+    const powerState = this._findSensorState(hass, 'power') || '-';
+    const msgState = this._findSensorState(hass, 'msg') || '-';
 
     this.querySelector('#vin').innerText = `${vinState} V`;
     this.querySelector('#vout').innerText = `${voutState} V`;
     this.querySelector('#power').innerText = `${powerState} %`;
     this.querySelector('#msg').innerText = msgState;
 
-    // Loop directly over loop variables array safely 
     for (let i = 0; i < 8; i++) {
       const swState = hass.states[`switch.${devId}_out0_${i}`]?.state === 'on';
       const lockState = hass.states[`switch.${devId}_lock0_${i}`]?.state === 'on';
