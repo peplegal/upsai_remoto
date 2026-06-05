@@ -89,3 +89,13 @@ class UpsaiRemotoCard extends HTMLElement {
   getCardSize() { return 5; }
 }
 customElements.define('upsai-remoto-card', UpsaiRemotoCard);
+
+// This tells Home Assistant's visual "Add Card" menu that your card exists!
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "upsai-remoto-card",
+  name: "UPSAI Remoto Panel",
+  description: "Painel de controle UPSAI Remoto.",
+  preview: true,
+  documentationURL: "https://upsai.com.br"
+});
