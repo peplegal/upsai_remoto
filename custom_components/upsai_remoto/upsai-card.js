@@ -16,8 +16,9 @@ class UpsaiRemotoCard extends HTMLElement {
             .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); }
             .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; }
             
-            /* 🚀 FIXED: MASTER UNLOCK BUTTON FORCED TO YELLOW COLOR STYLING */
-            #masterlock_btn { width: 100%; --mdc-theme-primary: #f1c40f; text-align: center; display: flex; justify-content: center; color: white; }
+            /* 🚀 FIXED: ACCENT COLOR SET VIA PRIMARY VARIABLE AND FORCED CONTENT WIDTH */
+            #masterlock_btn { width: 100%; --mdc-theme-primary: #f1c40f; --mdc-theme-on-primary: #ffffff; text-align: center; display: flex; justify-content: center; }
+            #masterlock_btn span { color: #ffffff !important; }
             
             .tabular-control { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 5px; padding: 8px 15px; align-items: center; }
             .header-row { font-weight: bold; border-bottom: 1px solid var(--divider-color); padding-bottom: 5px; }
@@ -25,7 +26,18 @@ class UpsaiRemotoCard extends HTMLElement {
             ha-icon-button { --mdc-icon-button-size: 36px; display: inline-flex; justify-content: center; }
             
             .reboot-btn-container { display: flex; justify-content: center; align-items: center; width: 100%; }
-            .reboot-btn { --mdc-theme-primary: var(--primary-color); --mdc-button-min-width: 36px; padding: 0; min-width: 36px; height: 36px; border-radius: 50%; }
+            
+            /* 🚀 FIXED: COMBINED MATERIAL THEME ACCENTS FORCING ICON BOX SIZE AND ALIGNMENT */
+            .reboot-btn { 
+              --mdc-theme-primary: var(--primary-color); 
+              --mdc-button-min-width: 40px !important; 
+              padding: 0 !important; 
+              width: 40px !important; 
+              height: 40px !important; 
+              min-width: 40px !important;
+              border-radius: 50% !important; 
+              display: inline-block;
+            }
           </style>
           
           <div class="grid-container">
@@ -64,7 +76,8 @@ class UpsaiRemotoCard extends HTMLElement {
                   </ha-icon-button>
                 </div>
                 <div class="reboot-btn-container">
-                  <mwc-button raised dense class="reboot-btn" id="reboot_${i}" data-index="${i}" icon="mdi:restart"></mwc-button>
+                  <!-- 🚀 FIXED: ADDED A NON-BREAKING SPACE ENTITY SO BUTTON COMPATH GIVES IT STRUCTURAL SHAPE -->
+                  <mwc-button raised dense class="reboot-btn" id="reboot_${i}" data-index="${i}" icon="mdi:restart">&nbsp;</mwc-button>
                 </div>
               </div>
             `).join('')}
