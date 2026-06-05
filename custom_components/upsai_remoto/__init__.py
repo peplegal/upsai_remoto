@@ -32,13 +32,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     
     
-    # 🎛️ LOVELACE STRATEGY DASHBOARD INJECTION
+    # 🎛️ LOVELACE STRATEGY DASHBOARD INJECTION / NATIVE FRONTIER DATA REGISTRATION (No imports required)
     try:
-        from homeassistant.components.frontend import (
-            async_register_dashboard,
-            async_register_dashboard_strategy,
-        )
-        
         current_dir = os.path.dirname(__file__)
         json_path = os.path.join(current_dir, "dashboards.json")
         
@@ -62,12 +57,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Store the processed configuration mapping inside memory so our strategy backend can find it
             hass.data.setdefault(DOMAIN, {})[f"dash_config_{entry.entry_id}"] = dashboard_config
 
-            # Register a full native Lovelace dashboard correctly
-            async_register_dashboard(
-                hass,
-                url_path=dashboard_id,
-                mode="yaml",
-                config={
+            # 1. Access the frontend data dictionary natively
+            frontend_data = hass.data.get("frontend")
+            if frontend_data and hasattr(frontend_data, "dashboards"):
+                
+                # 2. Inject the custom dashboard profile into the frontend's live storage tracking dict
+                frontend_data.dashboards[dashboard_id] = {
+                    "mode": "yaml",
                     "title": "UPSAI Remoto",
                     "icon": "mdi:power-matrix",
                     "show_in_sidebar": True,
@@ -77,23 +73,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         "name": strategy_name
                     }
                 }
-            )
 
-            # Define the dashboard configuration generation factory
-            class CustomDashboardStrategy:
-                @staticmethod
-                async def async_generate_config(hass_instance, config, *args, **kwargs):
-                    # Fetches your configuration dictionary from data storage
-                    return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
+                # 3. Intercept and declare the dashboard data callback strategy factory
+                class CustomDashboardStrategy:
+                    @staticmethod
+                    async def async_generate_config(hass_instance, config, *args, **kwargs):
+                        return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
 
-            # Register the strategy handler subclass into the frontend engine loop
-            async_register_dashboard_strategy(
-                hass,
-                strategy_name,
-                CustomDashboardStrategy
-            )
-            
-            _LOGGER.info("UPSAI Remoto Custom Lovelace Strategy panel compiled successfully.")
+                # Register the factory object name into the frontend registry dictionary
+                if not hasattr(frontend_data, "dashboard_strategies"):
+                    frontend_data.dashboard_strategies = {}
+                frontend_data.dashboard_strategies[strategy_name] = CustomDashboardStrategy
+
+                _LOGGER.info("UPSAI Remoto Custom Lovelace Dashboard injected directly into frontend registry.")
+            else:
+                _LOGGER.error("Frontend registry or dashboards tracking layer not initialized yet.")
         else:
             _LOGGER.error("Dashboard layout missing! Could not locate dashboards.json file.")
     except Exception as err:
@@ -212,18 +206,26 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             pass
 
-    # 🎛️ CLEANUP SIDEBAR LOVELACE STRATEGY
+    # 🎛️ CLEANUP SIDEBAR LOVELACE DATA REGISTRY
     try:
-        from homeassistant.components.frontend import async_remove_dashboard
+        dashboard_id = f"upsai_remoto_{entry.entry_id}"
+        strategy_name = f"upsai_remoto_strategy_{entry.entry_id}"
         
-        panel_url = f"upsai_remoto_{entry.entry_id}"
-        async_remove_dashboard(hass, panel_url)
-        
-        # Safely remove configuration references from memory
+        frontend_data = hass.data.get("frontend")
+        if frontend_data:
+            # Pop the dashboard registry map out to instantly drop the sidebar option
+            if hasattr(frontend_data, "dashboards"):
+                frontend_data.dashboards.pop(dashboard_id, None)
+            
+            # Drop the memory strategy engine reference
+            if hasattr(frontend_data, "dashboard_strategies"):
+                frontend_data.dashboard_strategies.pop(strategy_name, None)
+                
+        # Safely remove local integration configurations from memory
         hass.data[DOMAIN].pop(f"dash_config_{entry.entry_id}", None)
-        _LOGGER.info("Successfully removed Lovelace dashboard strategy context for entry: %s", entry.entry_id)
+        _LOGGER.info("Successfully dropped Lovelace dashboard strategy context from registries for entry: %s", entry.entry_id)
     except Exception as err:
-        _LOGGER.error("Failed to cleanly remove Lovelace dashboard strategy instance: %s", err)
+        _LOGGER.error("Failed to cleanly wipe Lovelace dashboard from active tracking tables: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
