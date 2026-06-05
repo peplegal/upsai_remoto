@@ -31,45 +31,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
         
-    # 🎛️ STABLE, DIRECT PANEL INJECTION (No Hacking / Error-Free)
+    # 🎛️ BULLETPROOF YAML DASHBOARD PROVISIONING ENGINE
     try:
-        from homeassistant.components.frontend import async_register_built_in_panel
-        
+        # Define paths to read template asset and write output into HA config directory
         current_dir = os.path.dirname(__file__)
-        json_path = os.path.join(current_dir, "dashboards.json")
+        template_path = os.path.join(current_dir, "dashboard_template.yaml")
+        output_dash_path = os.path.join(hass.config.config_dir, f"ui-lovelace-{device_id}.yaml")
+
+        def generate_yaml_dashboard():
+            if os.path.exists(template_path):
+                with open(template_path, "r", encoding="utf-8") as f:
+                    raw_content = f.read()
+                
+                # Replace our dynamic unique tracker template variables
+                processed_content = raw_content.replace("TEMPLATE_UNIQUE_ID", str(device_id))
+                
+                # Safely drop the finalized parsed YAML configuration payload file on disk
+                with open(output_dash_path, "w", encoding="utf-8") as out_f:
+                    out_f.write(processed_content)
+                return True
+            return False
+
+        # Run file operations asynchronously using the core background pool
+        await hass.async_add_executor_job(generate_yaml_dashboard)
+        _LOGGER.info("UPSAI Remoto: UI structure written to config/ui-lovelace-%s.yaml successfully.", device_id)
         
-        def load_dashboard_file():
-            if os.path.exists(json_path):
-                with open(json_path, "r", encoding="utf-8") as f:
-                    return f.read()
-            return None
-
-        # Safely fetch dashboards.json from storage
-        raw_layout = await hass.async_add_executor_job(load_dashboard_file)
-
-        if raw_layout:
-            # Map your device ID cleanly onto the placeholders
-            processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
-            dashboard_config = json.loads(processed_layout)
-
-            # Extract your exact layout payload block
-            views_array = dashboard_config.get("views", [])
-
-            # Inject the panel framing configuration using keyword arguments
-            async_register_built_in_panel(
-                hass,
-                component_name="custom",                # Forces raw UI framing bypassing db restrictions
-                sidebar_title="UPSAI Remoto",
-                sidebar_icon="mdi:power-matrix",
-                frontend_url_path=f"upsai_remoto_{entry.entry_id}",
-                config={"views": views_array},          # Feeds your list structure straight to the card renderers
-                require_admin=False,
-            )
-            _LOGGER.info("UPSAI Remoto custom dashboard panel injected successfully.")
-        else:
-            _LOGGER.error("Layout template dashboards.json could not be found.")
     except Exception as err:
-        _LOGGER.error("Failed to cleanly compile frontend UI interface: %s", err)
+        _LOGGER.error("UPSAI Remoto: Failed to provision dashboard asset template file on disk: %s", err)
 
     # -------------------
                    
@@ -183,16 +171,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await engine._ws.close()
         except Exception:
             pass
-
-    # 🎛️ REMOVE UI PANEL FRAME UPON UNLOAD
-    try:
-        from homeassistant.components.frontend import async_remove_panel
-        
-        panel_url = f"upsai_remoto_{entry.entry_id}"
-        async_remove_panel(hass, panel_url)
-        _LOGGER.info("Successfully dropped custom Lovelace panel frame from sidebar layout.")
-    except Exception as err:
-        _LOGGER.error("Failed to cleanly wipe sidebar layout panel frame: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
