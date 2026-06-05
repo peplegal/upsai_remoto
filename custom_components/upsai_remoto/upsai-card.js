@@ -12,16 +12,29 @@ class UpsaiRemotoCard extends HTMLElement {
             .status-title { font-weight: bold; margin-bottom: 4px; font-size: 14px; }
             .status-val { font-size: 18px; color: var(--secondary-text-color); font-weight: 500; }
 
-            .master-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; border-bottom: 1px solid var(--divider-color); align-items: center; }
-            .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); min-height: 80px; }
-            .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; text-align: center; }
+            /* 🚀 RE-ENGINEERED SYMMETRIC MASTER LAYOUT CONTROLLERS */
+            .master-container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; border-bottom: 1px solid var(--divider-color); }
+            .master-box { 
+              display: grid;
+              grid-template-rows: 24px 1fr; /* Strict static row sizing locks titles to identical heights */
+              align-items: center;
+              justify-items: center;
+              background: var(--card-background-color, var(--paper-card-background-color)); 
+              padding: 12px 10px; 
+              border-radius: 8px; 
+              border: 1px solid var(--divider-color); 
+              min-height: 85px; 
+              box-sizing: border-box;
+            }
+            .master-label { font-weight: bold; font-size: 13px; text-align: center; width: 100%; border-bottom: 1px solid var(--divider-color); padding-bottom: 4px; margin-bottom: 8px; color: var(--secondary-text-color); }
+            .master-action-cell { display: flex; align-items: center; justify-content: center; height: 44px; width: 100%; }
             
-            /* 🚀 FIXED: MASTER UNLOCK TRANSFORMED INTO A PERFECT HIGH-VISIBILITY YELLOW ICON BUTTON */
             .master-icon-btn { 
               color: #e6b800 !important;
               --mdc-icon-button-size: 44px;
               display: inline-flex;
               justify-content: center;
+              align-items: center;
             }
             .master-icon-btn ha-icon {
               --mdc-icon-size: 32px;
@@ -53,15 +66,19 @@ class UpsaiRemotoCard extends HTMLElement {
           
           <div class="master-container">
             <div class="master-box">
-              <div class="master-label">COMANDO GLOBAL</div>
-              <!-- 🚀 FIXED: REPLACED TEXT BUTTON WITH A STUNNING PURE ICON ACTION TOGGLE -->
-              <ha-icon-button class="master-icon-btn" id="masterlock_btn">
-                <ha-icon icon="mdi:lock-open-check"></ha-icon>
-              </ha-icon-button>
+              <div class="master-label">DESTRAVAR</div>
+              <!-- 🚀 LOCKED ACTION CELL TO BALANCE SHADOW-DOM ELEMENT GAP ASYMMETRY -->
+              <div class="master-action-cell">
+                <ha-icon-button class="master-icon-btn" id="masterlock_btn">
+                  <ha-icon icon="mdi:lock-open-check"></ha-icon>
+                </ha-icon-button>
+              </div>
             </div>
             <div class="master-box">
               <div class="master-label">DISPOSITIVO</div>
-              <ha-switch id="masterdevice_sw"></ha-switch>
+              <div class="master-action-cell">
+                <ha-switch id="masterdevice_sw"></ha-switch>
+              </div>
             </div>
           </div>
 
