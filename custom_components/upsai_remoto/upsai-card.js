@@ -77,6 +77,16 @@ class UpsaiRemotoCard extends HTMLElement {
 
   _setupListeners() {
     this.addEventListener('click', (ev) => {
+      // 1. STOPS OLD CACHED COPIES OF THE CARD FROM INTERCEPTING THIS CLICK
+      ev.stopImmediatePropagation();
+      
+      // 2. HARDWARE DEBOUNCE GUARD: Ignore clicks that happen within 250 milliseconds of each other
+      const now = Date.now();
+      if (this._lastClick && (now - this._lastClick < 250)) {
+        return;
+      }
+      this._lastClick = now;
+
       const target = ev.composedPath().find(el => el.id && (
         el.id.startsWith('out_') || 
         el.id.startsWith('lockbtn_') || 
@@ -88,7 +98,7 @@ class UpsaiRemotoCard extends HTMLElement {
       
       const devId = this.config.device_id.toLowerCase();
       
-      // 🚀 MASTER CLICK INTERCEPTORS
+      // MASTER CLICK INTERCEPTORS
       if (target.id === 'masterlock_btn') {
         this._hass.callService('button', 'press', { entity_id: `button.${devId}_master_unlock` });
         return;
