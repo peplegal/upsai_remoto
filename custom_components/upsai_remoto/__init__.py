@@ -32,81 +32,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
         
     # 🎛️ WEBSOCKET LOVELACE BRIDGE REGISTRATION
-    current_dir = os.path.dirname(__file__)
-    json_path = os.path.join(current_dir, "dashboards.json")
-    
-    # Safe Offloaded I/O execution via the core executor pool
-    def load_dashboard_file():
-        if os.path.exists(json_path):
-            with open(json_path, "r", encoding="utf-8") as f:
-                return f.read()
-        return None
+    try:
+        from homeassistant.components.frontend import async_register_built_in_panel
+        
+        current_dir = os.path.dirname(__file__)
+        json_path = os.path.join(current_dir, "dashboards.json")
+        
+        def load_dashboard_file():
+            if os.path.exists(json_path):
+                with open(json_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            return None
 
-    async def inject_dashboard_via_websocket(event=None):
-        try:
-            raw_layout = await hass.async_add_executor_job(load_dashboard_file)
-            if not raw_layout:
-                _LOGGER.error("Dashboard layout missing! Could not locate dashboards.json file.")
-                return
+        # Non-blocking file reading offloaded to worker pool
+        raw_layout = await hass.async_add_executor_job(load_dashboard_file)
 
-            # Swap out the placeholder string with the true physical device_id
+        if raw_layout:
+            # Map the true physical device_id variable cleanly
             processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
             dashboard_config = json.loads(processed_layout)
 
-            dashboard_id = f"upsai_remoto_{entry.entry_id}"
-            strategy_name = f"upsai_remoto_strategy_{entry.entry_id}"
-
-            # Safely pin data state to our unique device configuration space
-            hass.data.setdefault(DOMAIN, {})[f"dash_config_{entry.entry_id}"] = dashboard_config
-
-            # 🛠️ OFFICIAL CORE WEBSOCKET BRIDGE EXECUTION
-            # This triggers Home Assistant's internal dashboard builder safely
-            await hass.services.async_call(
-                "frontend",
-                "register_dashboard",
-                {
-                    "id": dashboard_id,
+            # Official UI Component injection 
+            async_register_built_in_panel(
+                hass,
+                component_name="lovelace",
+                sidebar_title="UPSAI Remoto",
+                sidebar_icon="mdi:power-matrix",
+                frontend_url_path=f"upsai_remoto_{entry.entry_id}",
+                config={
                     "mode": "yaml",
                     "title": "UPSAI Remoto",
-                    "icon": "mdi:power-matrix",
-                    "show_in_sidebar": True,
-                    "require_admin": False,
-                    "config": {
-                        "strategy": {
-                            "type": "custom",
-                            "name": strategy_name
-                        }
-                    }
+                    "views": dashboard_config["views"]  # Explicitly extract the views array directly
                 },
-                blocking=False
+                require_admin=False
             )
-
-            # Define the dashboard configuration generation factory
-            class CustomDashboardStrategy:
-                @staticmethod
-                async def async_generate_config(hass_instance, config, *args, **kwargs):
-                    return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
-
-            # Safe runtime fallback assignment to the frontend strategies object
-            frontend_data = hass.data.setdefault("frontend", object())
-            if not hasattr(frontend_data, "dashboard_strategies"):
-                setattr(frontend_data, "dashboard_strategies", {})
-            
-            frontend_data.dashboard_strategies[strategy_name] = CustomDashboardStrategy
-            _LOGGER.info("UPSAI Remoto dashboard layout linked perfectly via WebSocket engine.")
-
-        except Exception as err:
-            _LOGGER.error("Failed to programmatically run background Lovelace strategy initialization: %s", err)
-
-    # Check if the system is still booting up or if this is an integration Reload action
-    from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, CoreState
-    
-    if hass.state == CoreState.running:
-        entry.async_create_background_task(hass, inject_dashboard_via_websocket(), "upsai_reload_dash_task")
-    else:
-        entry.async_on_unload(
-            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, inject_dashboard_via_websocket)
-        )
+            _LOGGER.info("UPSAI Remoto UI Panel successfully registered.")
+        else:
+            _LOGGER.error("Dashboard file dashboards.json could not be located.")
+    except Exception as err:
+        _LOGGER.error("Failed to inject frontend Lovelace panel: %s", err)
 
     # -------------------
                    
@@ -223,26 +187,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # 🎛️ WEBSOCKET CLEANUP SIDEBAR LOVELACE DATA REGISTRY
     try:
-        dashboard_id = f"upsai_remoto_{entry.entry_id}"
-        strategy_name = f"upsai_remoto_strategy_{entry.entry_id}"
+        from homeassistant.components.frontend import async_remove_panel
         
-        # Fire the official system core teardown sequence
-        await hass.services.async_call(
-            "frontend",
-            "remove_dashboard",
-            {"id": dashboard_id},
-            blocking=False
-        )
-        
-        frontend_data = hass.data.get("frontend")
-        if frontend_data and hasattr(frontend_data, "dashboard_strategies"):
-            frontend_data.dashboard_strategies.pop(strategy_name, None)
-                
-        # Safely remove local integration configurations from memory
-        hass.data[DOMAIN].pop(f"dash_config_{entry.entry_id}", None)
-        _LOGGER.info("Successfully dropped Lovelace dashboard strategy context from registries for entry: %s", entry.entry_id)
+        panel_url = f"upsai_remoto_{entry.entry_id}"
+        async_remove_panel(hass, panel_url)
+        _LOGGER.info("Successfully dropped Lovelace sidebar panel.")
     except Exception as err:
-        _LOGGER.error("Failed to cleanly wipe Lovelace dashboard from active tracking tables: %s", err)
+        _LOGGER.error("Failed to cleanly wipe Lovelace sidebar panel: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
