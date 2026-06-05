@@ -31,56 +31,73 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
         
-    # 🎛️ DOCKER-SAFE DIRECT Lovelace DASHBOARD REGISTRATION
+    # 🎛️ AUTOMATED PLUG & PLAY LOVELACE INJECTION
     try:
         current_dir = os.path.dirname(__file__)
-        template_path = os.path.join(current_dir, "dashboard_template.yaml")
+        json_path = os.path.join(current_dir, "dashboards.json")
         
-        # 1. Save the file with a clean, static name inside the /config directory
-        # Using a static name makes it incredibly easy to link to the dashboard
-        output_filename = f"ui-lovelace-{device_id}.yaml"
-        output_dash_path = os.path.join(hass.config.config_dir, output_filename)
+        def load_dashboard_file():
+            if os.path.exists(json_path):
+                with open(json_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            return None
 
-        def generate_yaml_dashboard():
-            if os.path.exists(template_path):
-                with open(template_path, "r", encoding="utf-8") as f:
-                    raw_content = f.read()
-                
-                # Replace our dynamic unique tracker template variables
-                processed_content = raw_content.replace("TEMPLATE_UNIQUE_ID", str(device_id))
-                
-                with open(output_dash_path, "w", encoding="utf-8") as out_f:
-                    out_f.write(processed_content)
-                return True
-            return False
+        # 1. Load your dashboards.json asynchronously
+        raw_layout = await hass.async_add_executor_job(load_dashboard_file)
 
-        # Run file operations asynchronously using the core background pool
-        await hass.async_add_executor_job(generate_yaml_dashboard)
-        _LOGGER.info("UPSAI Remoto: UI structure written to config/%s successfully.", output_filename)
+        if raw_layout:
+            # 2. Dynamically swap the placeholder with the physical device_id
+            processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
+            dashboard_config = json.loads(processed_layout)
 
-        # 2. DOCKER INTEGRATION HOOK: Inject directly into the core lovelace system data
-        # This acts exactly like adding it to configuration.yaml, but happens dynamically in Python!
-        lovelace_data = hass.data.get("lovelace")
-        if lovelace_data and hasattr(lovelace_data, "dashboards"):
+            # Establish unique IDs for multi-device support
             dashboard_key = f"upsai_remoto_{entry.entry_id}"
-            
-            lovelace_data.dashboards[dashboard_key] = {
-                "mode": "yaml",
-                "filename": output_filename,
-                "title": "UPSAI Remoto",
-                "icon": "mdi:power-matrix",
-                "show_in_sidebar": True,
-                "require_admin": False,
-            }
-            
-            # Force Home Assistant to rebuild the sidebar navigation links immediately
-            if hasattr(lovelace_data, "async_panels_updated"):
-                lovelace_data.async_panels_updated()
+            strategy_name = f"upsai_strategy_{entry.entry_id}"
+
+            # Store the config dict in memory for the strategy to fetch later
+            hass.data.setdefault(DOMAIN, {})[f"dash_config_{entry.entry_id}"] = dashboard_config
+
+            # 3. Access the official frontend dashboard registry safely
+            frontend = hass.data.get("frontend")
+            if frontend and hasattr(frontend, "dashboards"):
                 
-            _LOGGER.info("UPSAI Remoto: Dashboard successfully loaded into core Lovelace memory arrays.")
-            
+                # 4. Register the dashboard structure natively in the sidebar array
+                frontend.dashboards[dashboard_key] = {
+                    "mode": "yaml",
+                    "title": "UPSAI Remoto",
+                    "icon": "mdi:power-matrix",
+                    "show_in_sidebar": True,
+                    "require_admin": False,
+                    "strategy": {
+                        "type": "custom",
+                        "name": strategy_name
+                    }
+                }
+
+                # 5. Define the dynamic layout factory class that Lovelace calls when clicked
+                class LovelaceDashboardStrategy:
+                    @staticmethod
+                    async def async_generate_config(hass_instance, config, *args, **kwargs):
+                        # Returns the view layout dictionary directly to the rendering engine
+                        return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
+
+                # 6. Register the strategy class into the frontend engine
+                if not hasattr(frontend, "dashboard_strategies"):
+                    frontend.dashboard_strategies = {}
+                frontend.dashboard_strategies[strategy_name] = LovelaceDashboardStrategy
+
+                # 7. Force Home Assistant to instantly draw the new sidebar menu item
+                if hasattr(frontend, "async_panels_updated"):
+                    frontend.async_panels_updated()
+
+                _LOGGER.info("UPSAI Remoto: Plug & Play dashboard registered successfully.")
+            else:
+                # Fallback: If frontend is initializing slowly during a cold boot
+                _LOGGER.warning("Frontend registry not fully ready yet. Dashboard will retry momentarily.")
+        else:
+            _LOGGER.error("UPSAI Remoto: Could not find dashboards.json inside the integration folder.")
     except Exception as err:
-        _LOGGER.error("UPSAI Remoto: Failed to provision dashboard asset template file on disk: %s", err)
+        _LOGGER.error("UPSAI Remoto: Failed to auto-inject dashboard strategy: %s", err)
 
     # -------------------
                    
@@ -194,6 +211,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await engine._ws.close()
         except Exception:
             pass
+    # 🎛️ PLUG & PLAY UNLOAD CLEANUP
+    try:
+        dashboard_key = f"upsai_remoto_{entry.entry_id}"
+        strategy_name = f"upsai_strategy_{entry.entry_id}"
+        
+        frontend = hass.data.get("frontend")
+        if frontend:
+            if hasattr(frontend, "dashboards"):
+                frontend.dashboards.pop(dashboard_key, None)
+            if hasattr(frontend, "dashboard_strategies"):
+                frontend.dashboard_strategies.pop(strategy_name, None)
+            if hasattr(frontend, "async_panels_updated"):
+                frontend.async_panels_updated()
+                
+        hass.data[DOMAIN].pop(f"dash_config_{entry.entry_id}", None)
+        _LOGGER.info("UPSAI Remoto: Dashboard successfully removed upon integration unload.")
+    except Exception as err:
+        _LOGGER.error("UPSAI Remoto: Error during dashboard teardown: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
