@@ -18,7 +18,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # 🚀 STRICT DYNAMIC LOOKUP: Strip out the fallback values completely
     device_ip = entry.data.get("ip")
     device_id = entry.data.get("device_id")
-    device_model = entry.data.get("model") or "FWI 1200"
+    device_model = entry.data.get("model") or "Modelo Indefinido"
     
     # 🚀 DEBUG LOGS: Print the exact variables fetched from the database
     _LOGGER.info(
@@ -32,15 +32,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     
     
-# 🎛️ DASHBOARD INJECTION BLOCK (Non-blocking / Safe)
+    # 🎛️ DASHBOARD INJECTION BLOCK (Non-blocking / Safe)
     try:
         current_dir = os.path.dirname(__file__)
         json_path = os.path.join(current_dir, "dashboards.json")
         
-        if os.path.exists(json_path):
-            with open(json_path, "r", encoding="utf-8") as f:
-                raw_layout = f.read()
+        # Define a small helper function to execute file reading on a worker thread
+        def load_dashboard_file():
+            if os.path.exists(json_path):
+                with open(json_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            return None
 
+        # Safe Offloaded I/O execution via the core executor pool
+        raw_layout = await hass.async_add_executor_job(load_dashboard_file)
+
+        if raw_layout:
             # Swap out the placeholder string with the true physical device_id
             processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
             dashboard_config = json.loads(processed_layout)
@@ -51,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 component_name="lovelace",
                 sidebar_title="UPSAI Remoto",
                 sidebar_icon="mdi:power-matrix",
-                frontend_url_path=f"upsai_remoto_{entry.entry_id}",  # Creates unique sidebar links if users have multiple UPS units
+                frontend_url_path=f"upsai_remoto_{entry.entry_id}",
                 config={
                     "mode": "yaml",
                     "title": "UPSAI Remoto",
