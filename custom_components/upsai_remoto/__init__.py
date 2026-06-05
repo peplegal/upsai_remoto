@@ -30,10 +30,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not device_ip or not device_id:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
-    
-    
-    # 🎛️ LOVELACE STRATEGY DASHBOARD INJECTION / NATIVE FRONTIER DATA REGISTRATION (No imports required)
-    # 🎛️ COALESCED EVENT-DRIVEN LOVELACE REGISTRATION (Race-Condition Free)
+        
+    # 🎛️ WEBSOCKET LOVELACE BRIDGE REGISTRATION
     current_dir = os.path.dirname(__file__)
     json_path = os.path.join(current_dir, "dashboards.json")
     
@@ -44,8 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return f.read()
         return None
 
-    # We declare the injection routine as a separate, safe internal function
-    async def inject_dashboard_after_boot(event=None):
+    async def inject_dashboard_via_websocket(event=None):
         try:
             raw_layout = await hass.async_add_executor_job(load_dashboard_file)
             if not raw_layout:
@@ -62,38 +59,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Safely pin data state to our unique device configuration space
             hass.data.setdefault(DOMAIN, {})[f"dash_config_{entry.entry_id}"] = dashboard_config
 
-            frontend_data = hass.data.get("frontend")
-            if frontend_data:
-                # Fallback to initialize dictionary schemas if completely blank
-                if not hasattr(frontend_data, "dashboards"):
-                    frontend_data.dashboards = {}
-                if not hasattr(frontend_data, "dashboard_strategies"):
-                    frontend_data.dashboard_strategies = {}
-
-                # 1. Inject the custom dashboard profile safely
-                frontend_data.dashboards[dashboard_id] = {
+            # 🛠️ OFFICIAL CORE WEBSOCKET BRIDGE EXECUTION
+            # This triggers Home Assistant's internal dashboard builder safely
+            await hass.services.async_call(
+                "frontend",
+                "register_dashboard",
+                {
+                    "id": dashboard_id,
                     "mode": "yaml",
                     "title": "UPSAI Remoto",
                     "icon": "mdi:power-matrix",
                     "show_in_sidebar": True,
                     "require_admin": False,
-                    "strategy": {
-                        "type": "custom",
-                        "name": strategy_name
+                    "config": {
+                        "strategy": {
+                            "type": "custom",
+                            "name": strategy_name
+                        }
                     }
-                }
+                },
+                blocking=False
+            )
 
-                # 2. Intercept and declare the dashboard data callback strategy factory
-                class CustomDashboardStrategy:
-                    @staticmethod
-                    async def async_generate_config(hass_instance, config, *args, **kwargs):
-                        return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
+            # Define the dashboard configuration generation factory
+            class CustomDashboardStrategy:
+                @staticmethod
+                async def async_generate_config(hass_instance, config, *args, **kwargs):
+                    return hass_instance.data[DOMAIN].get(f"dash_config_{entry.entry_id}")
 
-                # Save the mapping to render real-time UI configurations
-                frontend_data.dashboard_strategies[strategy_name] = CustomDashboardStrategy
-                _LOGGER.info("UPSAI Remoto dashboard layout linked perfectly into frontend loop.")
-            else:
-                _LOGGER.critical("System state critical: Frontend was not found even after the core system boot sequence finished.")
+            # Safe runtime fallback assignment to the frontend strategies object
+            frontend_data = hass.data.setdefault("frontend", object())
+            if not hasattr(frontend_data, "dashboard_strategies"):
+                setattr(frontend_data, "dashboard_strategies", {})
+            
+            frontend_data.dashboard_strategies[strategy_name] = CustomDashboardStrategy
+            _LOGGER.info("UPSAI Remoto dashboard layout linked perfectly via WebSocket engine.")
+
         except Exception as err:
             _LOGGER.error("Failed to programmatically run background Lovelace strategy initialization: %s", err)
 
@@ -101,12 +102,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, CoreState
     
     if hass.state == CoreState.running:
-        # If the system is already up (User manually clicked "Reload"), inject immediately
-        entry.async_create_background_task(hass, inject_dashboard_after_boot(), "upsai_reload_dash_task")
+        entry.async_create_background_task(hass, inject_dashboard_via_websocket(), "upsai_reload_dash_task")
     else:
-        # If the server is restarting, register a hook to run right after the frontend finishes loading
         entry.async_on_unload(
-            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, inject_dashboard_after_boot)
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, inject_dashboard_via_websocket)
         )
 
     # -------------------
@@ -222,20 +221,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             pass
 
-    # 🎛️ CLEANUP SIDEBAR LOVELACE DATA REGISTRY
+    # 🎛️ WEBSOCKET CLEANUP SIDEBAR LOVELACE DATA REGISTRY
     try:
         dashboard_id = f"upsai_remoto_{entry.entry_id}"
         strategy_name = f"upsai_remoto_strategy_{entry.entry_id}"
         
+        # Fire the official system core teardown sequence
+        await hass.services.async_call(
+            "frontend",
+            "remove_dashboard",
+            {"id": dashboard_id},
+            blocking=False
+        )
+        
         frontend_data = hass.data.get("frontend")
-        if frontend_data:
-            # Pop the dashboard registry map out to instantly drop the sidebar option
-            if hasattr(frontend_data, "dashboards"):
-                frontend_data.dashboards.pop(dashboard_id, None)
-            
-            # Drop the memory strategy engine reference
-            if hasattr(frontend_data, "dashboard_strategies"):
-                frontend_data.dashboard_strategies.pop(strategy_name, None)
+        if frontend_data and hasattr(frontend_data, "dashboard_strategies"):
+            frontend_data.dashboard_strategies.pop(strategy_name, None)
                 
         # Safely remove local integration configurations from memory
         hass.data[DOMAIN].pop(f"dash_config_{entry.entry_id}", None)
