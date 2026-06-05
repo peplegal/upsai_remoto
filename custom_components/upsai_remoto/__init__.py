@@ -2,7 +2,9 @@ import asyncio
 import logging
 import json
 import aiohttp
-
+import json
+import os
+from homeassistant.components.frontend import async_register_built_in_panel
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -29,6 +31,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Fatal initialization error: Dynamic network tracking credentials are missing!")
         return False
     
+    
+# 🎛️ DASHBOARD INJECTION BLOCK (Non-blocking / Safe)
+    try:
+        current_dir = os.path.dirname(__file__)
+        json_path = os.path.join(current_dir, "dashboards.json")
+        
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                raw_layout = f.read()
+
+            # Swap out the placeholder string with the true physical device_id
+            processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
+            dashboard_config = json.loads(processed_layout)
+
+            # Inject the custom dashboard view array into the Lovelace engine
+            async_register_built_in_panel(
+                hass,
+                component_name="lovelace",
+                sidebar_title="UPSAI Remoto",
+                sidebar_icon="mdi:power-matrix",
+                url_path=f"upsai_remoto_{entry.entry_id}",  # Creates unique sidebar links if users have multiple UPS units
+                config={
+                    "mode": "yaml",
+                    "title": "UPSAI Remoto",
+                    "views": dashboard_config["views"]
+                },
+                require_admin=False
+            )
+            _LOGGER.info("UPSAI Remoto dashboard structural layout injected successfully.")
+        else:
+            _LOGGER.error("Dashboard layout missing! Could not locate dashboards.json file.")
+    except Exception as err:
+        _LOGGER.error("Failed to programmatically inject custom dashboard layout: %s", err)
+
+    # -------------------
+                   
     session = async_get_clientsession(hass)
 
     class EventDrivenDeviceEngine:
@@ -128,6 +166,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     _LOGGER.info("Reloading UPSAI Remoto configuration entry due to an IP address update.")
     await hass.config_entries.async_reload(entry.entry_id)    
 
+from homeassistant.components.frontend import async_remove_panel
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload integration entry cleanly and notify the hardware."""
@@ -138,4 +177,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await engine._ws.close()
         except Exception:
             pass
+
+    # 🎛️ CLEANUP SIDEBAR PANEL
+    try:
+        # Match the exact unique URL string used during registration
+        panel_url = f"upsai_remoto_{entry.entry_id}"
+        async_remove_panel(hass, panel_url)
+        _LOGGER.info("Successfully removed sidebar Lovelace panel for entry: %s", entry.entry_id)
+    except Exception as err:
+        _LOGGER.error("Failed to cleanly remove Lovelace dashboard panel: %s", err)
+
+    # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
