@@ -32,45 +32,62 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
         
     # 🎛️ WEBSOCKET LOVELACE BRIDGE REGISTRATION
+    # 🎛️ DYNAMIC CONFIG-SPACE YAML DASHBOARD INJECTION
     try:
-        from homeassistant.components.frontend import async_register_built_in_panel
+        import yaml
         
+        # 1. Define paths: read your dashboards.json and map output to the main HA config
         current_dir = os.path.dirname(__file__)
         json_path = os.path.join(current_dir, "dashboards.json")
+        output_yaml_path = os.path.join(hass.config.config_dir, f"upsai_remoto_{entry.entry_id}.yaml")
         
-        def load_dashboard_file():
+        def process_and_write_dashboard():
             if os.path.exists(json_path):
                 with open(json_path, "r", encoding="utf-8") as f:
-                    return f.read()
-            return None
+                    raw_layout = f.read()
+                
+                # Dynamic placeholder values substitution
+                processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
+                dashboard_config = json.loads(processed_layout)
+                
+                # Strip out root arrays to create a pure canonical Lovelace YAML configuration schema
+                yaml_payload = {
+                    "title": dashboard_config.get("title", "UPSAI Remoto"),
+                    "views": dashboard_config.get("views", [])
+                }
+                
+                # Write to the main Home Assistant /config/ storage directory cleanly
+                with open(output_yaml_path, "w", encoding="utf-8") as out_f:
+                    yaml.dump(yaml_payload, out_f, allow_unicode=True, default_flow_style=False)
+                return True
+            return False
 
-        # Non-blocking file reading offloaded to worker pool
-        raw_layout = await hass.async_add_executor_job(load_dashboard_file)
+        # Run file I/O safely on the worker thread pool to comply with Home Assistant core rules
+        success = await hass.async_add_executor_job(process_and_write_dashboard)
 
-        if raw_layout:
-            # Map the true physical device_id variable cleanly
-            processed_layout = raw_layout.replace("TEMPLATE_UNIQUE_ID", str(device_id))
-            dashboard_config = json.loads(processed_layout)
-
-            # Official UI Component injection 
-            async_register_built_in_panel(
-                hass,
-                component_name="lovelace",
-                sidebar_title="UPSAI Remoto",
-                sidebar_icon="mdi:power-matrix",
-                frontend_url_path=f"upsai_remoto_{entry.entry_id}",
-                config={
+        if success:
+            dashboard_key = f"upsai_remoto_{entry.entry_id}"
+            
+            # Access the underlying live dashboard registry layer directly
+            frontend_data = hass.data.get("frontend")
+            if frontend_data and hasattr(frontend_data, "dashboards"):
+                
+                # Inject a native, read-only Lovelace YAML tracker into the live sidebar array
+                frontend_data.dashboards[dashboard_key] = {
                     "mode": "yaml",
+                    "filename": f"upsai_remoto_{entry.entry_id}.yaml",
                     "title": "UPSAI Remoto",
-                    "views": dashboard_config["views"]  # Explicitly extract the views array directly
-                },
-                require_admin=False
-            )
-            _LOGGER.info("UPSAI Remoto UI Panel successfully registered.")
+                    "icon": "mdi:power-matrix",
+                    "show_in_sidebar": True,
+                    "require_admin": False,
+                }
+                _LOGGER.info("UPSAI Remoto custom YAML dashboard mounted seamlessly into sidebar tracking tables.")
+            else:
+                _LOGGER.error("Frontend dashboard mapping array unavailable during initialization.")
         else:
-            _LOGGER.error("Dashboard file dashboards.json could not be located.")
+            _LOGGER.error("Source layouts missing! Could not locate dashboards.json template file.")
     except Exception as err:
-        _LOGGER.error("Failed to inject frontend Lovelace panel: %s", err)
+        _LOGGER.error("Failed to compile custom file-backed Lovelace panel: %s", err)
 
     # -------------------
                    
@@ -186,14 +203,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             pass
 
     # 🎛️ WEBSOCKET CLEANUP SIDEBAR LOVELACE DATA REGISTRY
+    # 🎛️ WIPE DASHBOARD AND TEMPORARY ASSETS FROM WORKSPACE
     try:
-        from homeassistant.components.frontend import async_remove_panel
+        dashboard_key = f"upsai_remoto_{entry.entry_id}"
+        frontend_data = hass.data.get("frontend")
         
-        panel_url = f"upsai_remoto_{entry.entry_id}"
-        async_remove_panel(hass, panel_url)
-        _LOGGER.info("Successfully dropped Lovelace sidebar panel.")
+        if frontend_data and hasattr(frontend_data, "dashboards"):
+            frontend_data.dashboards.pop(dashboard_key, None)
+            
+        # Safely erase the physical generated yaml file on a worker thread
+        output_yaml_path = os.path.join(hass.config.config_dir, f"upsai_remoto_{entry.entry_id}.yaml")
+        def delete_yaml_file():
+            if os.path.exists(output_yaml_path):
+                os.remove(output_yaml_path)
+        
+        await hass.async_add_executor_job(delete_yaml_file)
+        _LOGGER.info("Successfully dropped custom dashboard file and purged entry context from memory.")
     except Exception as err:
-        _LOGGER.error("Failed to cleanly wipe Lovelace sidebar panel: %s", err)
+        _LOGGER.error("Failed to run automated cleanup for Lovelace workspace assets: %s", err)
 
     # Continue with your untouched platform unloading sequence
     return await hass.config_entries.async_unload_platforms(entry, ["sensor", "switch", "button"])
