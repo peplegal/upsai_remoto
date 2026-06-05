@@ -8,7 +8,6 @@ class UpsaiRemotoCard extends HTMLElement {
             .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; text-align: center; }
             .telemetry-val { font-size: 24px; font-weight: bold; color: var(--primary-color); }
             
-            /* 🚀 POLISHED STATUS MESSAGE BLOCK OVERLAY */
             .status-container { text-align: center; padding: 0 15px 15px 15px; border-bottom: 1px solid var(--divider-color); }
             .status-title { font-weight: bold; margin-bottom: 4px; font-size: 14px; }
             .status-val { font-size: 18px; color: var(--secondary-text-color); font-weight: 500; }
@@ -17,16 +16,16 @@ class UpsaiRemotoCard extends HTMLElement {
             .master-box { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--card-background-color, var(--paper-card-background-color)); padding: 10px; border-radius: 8px; border: 1px solid var(--divider-color); }
             .master-label { font-weight: bold; margin-bottom: 8px; font-size: 14px; }
             
-            /* 🚀 CENTERED FULL-WIDTH MASTER BUTTON DESIGN */
-            #masterlock_btn { width: 100%; --mdc-theme-primary: var(--primary-color); text-align: center; display: flex; justify-content: center; }
+            /* 🚀 FIXED: MASTER UNLOCK BUTTON FORCED TO YELLOW COLOR STYLING */
+            #masterlock_btn { width: 100%; --mdc-theme-primary: #f1c40f; text-align: center; display: flex; justify-content: center; color: white; }
             
             .tabular-control { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 5px; padding: 8px 15px; align-items: center; }
             .header-row { font-weight: bold; border-bottom: 1px solid var(--divider-color); padding-bottom: 5px; }
             ha-switch { display: inline-flex; justify-content: center; }
             ha-icon-button { --mdc-icon-button-size: 36px; display: inline-flex; justify-content: center; }
             
-            /* 🚀 REBOOT BUTTON ICON STYLING */
-            .reboot-btn { --mdc-theme-primary: var(--primary-color); width: 100%; display: flex; justify-content: center; }
+            .reboot-btn-container { display: flex; justify-content: center; align-items: center; width: 100%; }
+            .reboot-btn { --mdc-theme-primary: var(--primary-color); --mdc-button-min-width: 36px; padding: 0; min-width: 36px; height: 36px; border-radius: 50%; }
           </style>
           
           <div class="grid-container">
@@ -35,7 +34,6 @@ class UpsaiRemotoCard extends HTMLElement {
             <div><div><b>Consumo</b></div><div class="telemetry-val" id="power">- %</div></div>
           </div>
           
-          <!-- 🚀 RESTRUCTURED STATUS MESSAGE ROW (TITLE ABOVE) -->
           <div class="status-container">
             <div class="status-title">ESTADO DO SISTEMA</div>
             <div class="status-val" id="msg">Iniciando...</div>
@@ -44,7 +42,6 @@ class UpsaiRemotoCard extends HTMLElement {
           <div class="master-container">
             <div class="master-box">
               <div class="master-label">COMANDO GLOBAL</div>
-              <!-- 🚀 FIXED: PROPER ICON INTEGRATION AND INNER CENTERING SPAN -->
               <mwc-button raised dense id="masterlock_btn" icon="mdi:lock-open-check"><span>DESTRAVAR</span></mwc-button>
             </div>
             <div class="master-box">
@@ -66,9 +63,8 @@ class UpsaiRemotoCard extends HTMLElement {
                     <ha-icon id="lockico_${i}" icon="mdi:lock-open"></ha-icon>
                   </ha-icon-button>
                 </div>
-                <div style="text-align:center;">
-                  <!-- 🚀 FIXED: ADDED RESTART ICON AND EXACT LABEL ALIGNMENT -->
-                  <mwc-button raised dense class="reboot-btn" id="reboot_${i}" data-index="${i}" icon="mdi:restart">Reset</mwc-button>
+                <div class="reboot-btn-container">
+                  <mwc-button raised dense class="reboot-btn" id="reboot_${i}" data-index="${i}" icon="mdi:restart"></mwc-button>
                 </div>
               </div>
             `).join('')}
